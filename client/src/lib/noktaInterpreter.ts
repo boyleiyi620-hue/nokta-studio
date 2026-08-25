@@ -4,7 +4,7 @@
  * Tasarım sorusu: Bu seçim Atölye Defteri yaklaşımını güçlendiriyor mu?
  */
 
-export type ConsoleTone = "output" | "step" | "success" | "error" | "info";
+export type ConsoleTone = "output" | "step" | "success" | "error" | "info" | "permission" | "automation";
 
 export interface ConsoleEntry {
   tone: ConsoleTone;
@@ -14,8 +14,40 @@ export interface ConsoleEntry {
 
 export interface RunResult {
   entries: ConsoleEntry[];
+  plans: AutomationPlan[];
+  previews: DataPreview[];
+  diagnostics: Diagnostic[];
   ok: boolean;
   duration: number;
+}
+
+export interface AutomationPlan {
+  kind: "zamanlama" | "olay";
+  title: string;
+  line: number;
+}
+
+export interface DataPreview {
+  title: string;
+  columns: string[];
+  rows: RuntimeRecord[];
+}
+
+export interface DatasetSource {
+  name: string;
+  format: "csv" | "json";
+  content: string;
+}
+
+export interface RunOptions {
+  datasets?: Record<string, DatasetSource>;
+}
+
+export interface Diagnostic {
+  code: string;
+  line?: number;
+  message: string;
+  suggestion: string;
 }
 
 type Primitive = string | number | boolean | null;
@@ -52,6 +84,9 @@ type Statement =
   | { type: "loop"; name: string; collection: Expression; body: Statement[]; line: number }
   | { type: "flow"; title: Expression; body: Statement[]; line: number }
   | { type: "step"; title: Expression; body: Statement[]; line: number }
+  | { type: "permission"; domain: string; target: Expression; line: number }
+  | { type: "schedule"; title: Expression; body: Statement[]; line: number }
+  | { type: "event"; title: Expression; body: Statement[]; line: number }
   | { type: "function"; name: string; parameters: string[]; body: Statement[]; line: number }
   | { type: "return"; expression: Expression; line: number }
   | { type: "stop"; expression?: Expression; line: number }
@@ -61,6 +96,8 @@ class NoktaError extends Error {
   constructor(
     public readonly line: number,
     message: string,
+    public readonly code = "NOKTA_100",
+    public readonly suggestion = "İfadeyi ve ilgili satırdaki veri türünü kontrol edin.",
   ) {
     super(message);
     this.name = "NoktaError";
@@ -79,7 +116,7 @@ class Environment {
   get(name: string, line: number): RuntimeValue {
     if (this.values.has(name)) return this.values.get(name)!;
     if (this.parent) return this.parent.get(name, line);
-    throw new NoktaError(line, `“${name}” adında bir değer bulunamadı.`);
+    throw new NoktaError(line, `“${name}” adında bir değer bulunamadı.`, "NOKTA_101", `“${name}” için önce bir atama yapın veya adı yazım hatasına karşı kontrol edin.`);
   }
 
   assign(name: string, value: RuntimeValue) {
@@ -401,6 +438,11 @@ class ProgramParser {
       this.index += 1;
       return { type: "output", expression: parseExpression(content.slice(4), line), line };
     }
+    const permission = content.match(/^izin\s+(uygulama|bildirim|dosya|ag)\s+(.+)$/);
+    if (permission) {
+      this.index += 1;
+      return { type: "permission", domain: permission[1], target: parseExpression(permission[2], line), line };
+    }
     if (content.startsWith("dondur ")) {
       this.index += 1;
       return { type: "return", expression: parseExpression(content.slice(7), line), line };
@@ -436,6 +478,16 @@ class ProgramParser {
       this.index += 1;
       return { type: "step", title: parseExpression(step[1], line), body: this.parseChildBlock(source), line };
     }
+    const schedule = content.match(/^zamanla\s+(.+):$/);
+    if (schedule) {
+      this.index += 1;
+      return { type: "schedule", title: parseExpression(schedule[1], line), body: this.parseChildBlock(source), line };
+    }
+    const event = content.match(/^olay\s+(.+):$/);
+    if (event) {
+      this.index += 1;
+      return { type: "event", title: parseExpression(event[1], line), body: this.parseChildBlock(source), line };
+    }
     const fn = content.match(/^islev\s+([A-Za-z_ÇĞİÖŞÜçğıöşü][A-Za-z0-9_ÇĞİÖŞÜçğıöşü]*)\s*\((.*)\)\s*:\s*$/);
     if (fn) {
       const parameters = fn[2].trim() === "" ? [] : fn[2].split(",").map((parameter) => parameter.trim());
@@ -465,7 +517,33 @@ class ProgramParser {
 
 class Runtime {
   readonly entries: ConsoleEntry[] = [];
+  readonly plans: AutomationPlan[] = [];
+  readonly previews: DataPreview[] = [];
+  private readonly permissions = new Set<string>();
   private operations = 0;
+
+  grantPermission(domain: string, target: string, line: number) {
+    this.permissions.add(`${domain}:${target}`);
+    this.entries.push({ tone: "permission", line, text: `İzin verildi — ${domain}: ${target}` });
+  }
+
+  requirePermission(domain: string, target: string) {
+    if (!this.permissions.has(`${domain}:${target}`)) {
+      throw new NoktaError(0, `“${target}” için ${domain} izni yok. Önce izin ${domain} "${target}" bildirin.`);
+    }
+  }
+
+  requireAnyPermission(domain: string) {
+    if (!Array.from(this.permissions).some((item) => item.startsWith(`${domain}:`))) {
+      throw new NoktaError(0, `Bu eylem için en az bir ${domain} izni bildirin.`);
+    }
+  }
+
+  addPreview(title: string, table: RuntimeRecord[]) {
+    const columns = Array.from(new Set(table.flatMap((row) => Object.keys(row))));
+    this.previews.push({ title, columns, rows: table.slice(0, 6) });
+    this.entries.push({ tone: "info", text: `Tablo önizlemesi hazır — ${title}: ${table.length} satır, ${columns.length} sütun` });
+  }
 
   tick(line: number) {
     this.operations += 1;
@@ -489,6 +567,12 @@ class Runtime {
       case "assign":
         environment.assign(statement.name, this.evaluate(statement.expression, environment, statement.line));
         return { kind: "normal" };
+      case "permission": {
+        const target = this.evaluate(statement.target, environment, statement.line);
+        if (typeof target !== "string") throw new NoktaError(statement.line, "İzin hedefi metin olmalı.");
+        this.grantPermission(statement.domain, target, statement.line);
+        return { kind: "normal" };
+      }
       case "expression":
         this.evaluate(statement.expression, environment, statement.line);
         return { kind: "normal" };
@@ -518,6 +602,20 @@ class Runtime {
         const result = this.executeBlock(statement.body, environment);
         if (result.kind === "normal") this.entries.push({ tone: "success", line: statement.line, text: `Adım tamamlandı — ${title}` });
         return result;
+      }
+      case "schedule": {
+        const title = formatValue(this.evaluate(statement.title, environment, statement.line));
+        this.plans.push({ kind: "zamanlama", title, line: statement.line });
+        this.entries.push({ tone: "automation", line: statement.line, text: `Zamanlama planlandı — ${title}` });
+        const result = this.executeBlock(statement.body, new Environment(environment));
+        if (result.kind === "normal") this.entries.push({ tone: "success", line: statement.line, text: `Zamanlama önizlemesi tamamlandı — ${title}` });
+        return result;
+      }
+      case "event": {
+        const title = formatValue(this.evaluate(statement.title, environment, statement.line));
+        this.plans.push({ kind: "olay", title, line: statement.line });
+        this.entries.push({ tone: "automation", line: statement.line, text: `Olay dinleyicisi hazır — ${title}` });
+        return { kind: "normal" };
       }
       case "function":
         environment.define(statement.name, new NoktaFunction(statement.parameters, statement.body, environment));
@@ -621,7 +719,7 @@ function getMember(object: RuntimeValue, property: string, line: number): Runtim
   throw new NoktaError(line, `Bu değerde “${property}” alanı bulunamadı.`);
 }
 
-function createGlobals(): Environment {
+function createGlobals(runtime: Runtime, datasets: Record<string, DatasetSource> = {}): Environment {
   const globals = new Environment();
   const onlyList = (value: RuntimeValue): RuntimeValue[] => {
     if (!Array.isArray(value)) throw new NoktaError(0, "Bu işlem bir liste bekliyor.");
@@ -640,16 +738,132 @@ function createGlobals(): Environment {
     }) as NativeFunction,
     ters_cevir: ((value) => [...onlyList(value)].reverse()) as NativeFunction,
     sirala: ((value) => [...onlyList(value)].sort((a, b) => formatValue(a).localeCompare(formatValue(b), "tr"))) as NativeFunction,
+    ekle: ((value, item) => [...onlyList(value), item]) as NativeFunction,
+    ilk: ((value) => onlyList(value)[0] ?? null) as NativeFunction,
+    son: ((value) => onlyList(value).at(-1) ?? null) as NativeFunction,
+    icerir_mi: ((value, item) => onlyList(value).some((candidate) => areEqual(candidate, item))) as NativeFunction,
   });
   globals.define("metin", {
     buyuk: ((value) => onlyText(value).toLocaleUpperCase("tr")) as NativeFunction,
     kucuk: ((value) => onlyText(value).toLocaleLowerCase("tr")) as NativeFunction,
     uzunluk: ((value) => onlyText(value).length) as NativeFunction,
     birlestir: ((value, ayirac = "") => onlyList(value).map(formatValue).join(onlyText(ayirac))) as NativeFunction,
+    icerir_mi: ((value, parca) => onlyText(value).includes(onlyText(parca))) as NativeFunction,
+    degistir: ((value, aranan, yeni) => onlyText(value).replaceAll(onlyText(aranan), onlyText(yeni))) as NativeFunction,
+    bol: ((value, ayirac) => onlyText(value).split(onlyText(ayirac))) as NativeFunction,
   });
   globals.define("sayi", {
     yuvarla: ((value) => Math.round(asNumber(value, 0))) as NativeFunction,
     mutlak: ((value) => Math.abs(asNumber(value, 0))) as NativeFunction,
+    sinirla: ((value, alt, ust) => Math.min(Math.max(asNumber(value, 0), asNumber(alt, 0)), asNumber(ust, 0))) as NativeFunction,
+  });
+  globals.define("json", {
+    coz: ((value) => {
+      try {
+        return JSON.parse(onlyText(value)) as RuntimeValue;
+      } catch {
+        throw new NoktaError(0, "JSON metni çözülemedi. Tırnakları, virgülleri ve köşeli parantezleri kontrol edin.");
+      }
+    }) as NativeFunction,
+    yaz: ((value) => JSON.stringify(value, null, 2)) as NativeFunction,
+  });
+  globals.define("csv", {
+    coz: ((value) => parseCsv(onlyText(value))) as NativeFunction,
+    yaz: ((value) => stringifyCsv(ensureTable(value))) as NativeFunction,
+  });
+  globals.define("veri", {
+    dosyalar: (() => Object.keys(datasets)) as NativeFunction,
+    metin: ((value) => {
+      const name = onlyText(value);
+      const dataset = datasets[name];
+      if (!dataset) throw new NoktaError(0, `“${name}” adlı yüklenmiş veri kümesi bulunamadı.`, "NOKTA_201", "Sol kenar çubuğundan bir CSV veya JSON dosyası yükleyin; ardından dosya adını veri.al içinde kullanın.");
+      return dataset.content;
+    }) as NativeFunction,
+    al: ((value) => {
+      const name = onlyText(value);
+      const dataset = datasets[name];
+      if (!dataset) throw new NoktaError(0, `“${name}” adlı yüklenmiş veri kümesi bulunamadı.`, "NOKTA_201", "Sol kenar çubuğundan bir CSV veya JSON dosyası yükleyin; ardından dosya adını veri.al içinde kullanın.");
+      try {
+        const parsed = dataset.format === "csv" ? parseCsv(dataset.content) : JSON.parse(dataset.content) as RuntimeValue;
+        runtime.entries.push({ tone: "info", text: `Veri kümesi bağlandı — ${name} (${dataset.format.toUpperCase()})` });
+        return parsed;
+      } catch (error) {
+        if (error instanceof NoktaError) throw error;
+        throw new NoktaError(0, `“${name}” dosyasındaki JSON çözülemedi.`, "NOKTA_202", "JSON dosyasında tırnak, virgül ve köşeli parantez eşleşmelerini kontrol edin.");
+      }
+    }) as NativeFunction,
+  });
+  globals.define("tablo", {
+    say: ((value) => ensureTable(value).length) as NativeFunction,
+    sutun: ((value, field) => ensureTable(value).map((row) => getRecordField(row, onlyText(field)))) as NativeFunction,
+    filtrele: ((value, field, operator, expected) => ensureTable(value).filter((row) => compareValue(getRecordField(row, onlyText(field)), onlyText(operator), expected))) as NativeFunction,
+    sec: ((value, fields) => {
+      const names = onlyList(fields).map(onlyText);
+      return ensureTable(value).map((row) => Object.fromEntries(names.map((name) => [name, getRecordField(row, name)])));
+    }) as NativeFunction,
+    sirala: ((value, field, direction = "artan") => {
+      const name = onlyText(field);
+      const descending = onlyText(direction) === "azalan";
+      return [...ensureTable(value)].sort((left, right) => compareSort(getRecordField(left, name), getRecordField(right, name)) * (descending ? -1 : 1));
+    }) as NativeFunction,
+    grupla: ((value, field) => {
+      const name = onlyText(field);
+      return ensureTable(value).reduce<RuntimeRecord>((groups, row) => {
+        const key = formatValue(getRecordField(row, name));
+        const current = groups[key];
+        groups[key] = Array.isArray(current) ? [...current, row] : [row];
+        return groups;
+      }, {});
+    }) as NativeFunction,
+    topla: ((value, field) => ensureTable(value).reduce((sum, row) => sum + asNumber(getRecordField(row, onlyText(field)), 0), 0)) as NativeFunction,
+    ortalama: ((value, field) => {
+      const table = ensureTable(value);
+      return table.length === 0 ? 0 : table.reduce((sum, row) => sum + asNumber(getRecordField(row, onlyText(field)), 0), 0) / table.length;
+    }) as NativeFunction,
+    onizle: ((value, title = "Tablo") => {
+      const table = ensureTable(value);
+      runtime.addPreview(onlyText(title), table);
+      return table;
+    }) as NativeFunction,
+  });
+  globals.define("kayit", {
+    anahtarlar: ((value) => {
+      if (!isRecord(value)) throw new NoktaError(0, "Bu işlem bir kayıt bekliyor.");
+      return Object.keys(value);
+    }) as NativeFunction,
+    degerler: ((value) => {
+      if (!isRecord(value)) throw new NoktaError(0, "Bu işlem bir kayıt bekliyor.");
+      return Object.values(value);
+    }) as NativeFunction,
+  });
+  globals.define("uygulama", {
+    ac: ((target) => {
+      const name = onlyText(target);
+      runtime.requirePermission("uygulama", name);
+      runtime.entries.push({ tone: "automation", text: `Uygulama açma planlandı — ${name}` });
+      return true;
+    }) as NativeFunction,
+    kapat: ((target) => {
+      const name = onlyText(target);
+      runtime.requirePermission("uygulama", name);
+      runtime.entries.push({ tone: "automation", text: `Uygulama kapatma planlandı — ${name}` });
+      return true;
+    }) as NativeFunction,
+  });
+  globals.define("bildirim", {
+    izle: ((target) => {
+      const name = onlyText(target);
+      runtime.requirePermission("bildirim", name);
+      runtime.entries.push({ tone: "automation", text: `Bildirim izleme planlandı — ${name}` });
+      return true;
+    }) as NativeFunction,
+  });
+  globals.define("uyari", {
+    gonder: ((message) => {
+      runtime.requireAnyPermission("bildirim");
+      runtime.entries.push({ tone: "automation", text: `Uyarı planlandı — ${onlyText(message)}` });
+      return true;
+    }) as NativeFunction,
   });
   globals.define("ornek_satislar", [
     { sehir: "Ankara", tutar: 1200, durum: "tamam" },
@@ -670,6 +884,85 @@ function asNumber(value: RuntimeValue, line: number): number {
 }
 function areEqual(left: RuntimeValue, right: RuntimeValue) { return left === right; }
 
+function ensureTable(value: RuntimeValue): RuntimeRecord[] {
+  if (!Array.isArray(value) || value.some((item) => !isRecord(item))) {
+    throw new NoktaError(0, "Tablo işlemi, kayıtlardan oluşan bir liste bekliyor.");
+  }
+  return value as RuntimeRecord[];
+}
+
+function getRecordField(record: RuntimeRecord, field: string): RuntimeValue {
+  if (!(field in record)) throw new NoktaError(0, `Tabloda “${field}” adlı bir sütun bulunamadı.`);
+  return record[field];
+}
+
+function compareValue(actual: RuntimeValue, operator: string, expected: RuntimeValue): boolean {
+  switch (operator) {
+    case "==": return areEqual(actual, expected);
+    case "!=": return !areEqual(actual, expected);
+    case ">": return asNumber(actual, 0) > asNumber(expected, 0);
+    case ">=": return asNumber(actual, 0) >= asNumber(expected, 0);
+    case "<": return asNumber(actual, 0) < asNumber(expected, 0);
+    case "<=": return asNumber(actual, 0) <= asNumber(expected, 0);
+    case "icerir": return formatValue(actual).includes(formatValue(expected));
+    default: throw new NoktaError(0, `“${operator}” tablo filtresi desteklenmiyor.`);
+  }
+}
+
+function compareSort(left: RuntimeValue, right: RuntimeValue) {
+  if (typeof left === "number" && typeof right === "number") return left - right;
+  return formatValue(left).localeCompare(formatValue(right), "tr");
+}
+
+function parseCsv(source: string): RuntimeRecord[] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '"') {
+      if (quoted && source[index + 1] === '"') { cell += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (character === "," && !quoted) { row.push(cell); cell = ""; }
+    else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && source[index + 1] === "\n") index += 1;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += character;
+  }
+  if (quoted) throw new NoktaError(0, "CSV metninde kapanmayan bir tırnak bulundu.");
+  if (cell !== "" || row.length > 0) { row.push(cell); rows.push(row); }
+  const [headers, ...data] = rows.filter((candidate) => candidate.some((item) => item.trim() !== ""));
+  if (!headers || headers.length === 0) return [];
+  const normalized = headers.map((header) => header.trim());
+  if (new Set(normalized).size !== normalized.length || normalized.some((header) => header === "")) {
+    throw new NoktaError(0, "CSV başlıkları boş veya tekrar eden sütun adı içeriyor.");
+  }
+  return data.map((cells, rowIndex) => {
+    if (cells.length !== normalized.length) throw new NoktaError(0, `CSV satır ${rowIndex + 2}, ${normalized.length} hücre bekliyor; ${cells.length} hücre bulundu.`);
+    return Object.fromEntries(normalized.map((header, index) => [header, parseCell(cells[index])])) as RuntimeRecord;
+  });
+}
+
+function parseCell(value: string): RuntimeValue {
+  const trimmed = value.trim();
+  if (trimmed === "") return "";
+  if (trimmed === "dogru") return true;
+  if (trimmed === "yanlis") return false;
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  return trimmed;
+}
+
+function stringifyCsv(table: RuntimeRecord[]): string {
+  if (table.length === 0) return "";
+  const headers = Array.from(new Set(table.flatMap((row) => Object.keys(row))));
+  const escape = (value: RuntimeValue) => {
+    const text = formatValue(value);
+    return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  };
+  return [headers.join(","), ...table.map((row) => headers.map((header) => escape(row[header] ?? "")).join(","))].join("\n");
+}
+
 export function formatValue(value: RuntimeValue): string {
   if (value === null) return "boş";
   if (value === true) return "doğru";
@@ -680,18 +973,19 @@ export function formatValue(value: RuntimeValue): string {
   return String(value);
 }
 
-export function runNokta(source: string): RunResult {
+export function runNokta(source: string, options: RunOptions = {}): RunResult {
   const started = performance.now();
   const runtime = new Runtime();
   try {
     const program = new ProgramParser(normalizeSource(source)).parse();
-    const signal = runtime.executeBlock(program, createGlobals());
+    const signal = runtime.executeBlock(program, createGlobals(runtime, options.datasets));
     if (signal.kind === "stop") runtime.entries.push({ tone: "info", text: signal.value ? `Akış durdu — ${formatValue(signal.value)}` : "Akış durdu." });
-    return { entries: runtime.entries, ok: true, duration: performance.now() - started };
+    return { entries: runtime.entries, plans: runtime.plans, previews: runtime.previews, diagnostics: [], ok: true, duration: performance.now() - started };
   } catch (error) {
     const details = error instanceof NoktaError ? error : new NoktaError(0, "Bilinmeyen bir çalışma hatası oluştu.");
-    runtime.entries.push({ tone: "error", line: details.line || undefined, text: details.message });
-    return { entries: runtime.entries, ok: false, duration: performance.now() - started };
+    const diagnostic = { code: details.code, line: details.line || undefined, message: details.message, suggestion: details.suggestion };
+    runtime.entries.push({ tone: "error", line: details.line || undefined, text: `[${details.code}] ${details.message}` });
+    return { entries: runtime.entries, plans: runtime.plans, previews: runtime.previews, diagnostics: [diagnostic], ok: false, duration: performance.now() - started };
   }
 }
 
@@ -704,6 +998,57 @@ export interface NoktaExample {
 }
 
 export const NOKTA_EXAMPLES: NoktaExample[] = [
+  {
+    id: "csv-rapor",
+    title: "CSV satış raporu",
+    subtitle: "CSV çöz, filtrele ve tablo önizle",
+    tags: ["csv", "tablo"],
+    code: `ham_csv = "sehir,tutar,durum\\nAnkara,1200,tamam\\nİzmir,850,bekliyor\\nİstanbul,2400,tamam\\nAnkara,675,tamam"
+satislar = csv.coz(ham_csv)
+tamamlanan = tablo.filtrele(satislar, "durum", "==", "tamam")
+sirali = tablo.sirala(tamamlanan, "tutar", "azalan")
+
+tablo.onizle(sirali, "Tamamlanan siparişler")
+yaz "Sipariş sayısı: " + tablo.say(sirali)
+yaz "Toplam ciro: " + tablo.topla(sirali, "tutar")
+yaz "CSV çıktısı:\\n" + csv.yaz(tablo.sec(sirali, ["sehir", "tutar"]))`,
+  },
+  {
+    id: "json-analiz",
+    title: "JSON öğrenci analizi",
+    subtitle: "JSON çöz, seç ve gruplandır",
+    tags: ["json", "grupla"],
+    code: `ham_json = '[{"ad":"Ada","sinif":"10A","puan":91},{"ad":"Efe","sinif":"10B","puan":76},{"ad":"Lale","sinif":"10A","puan":88}]'
+ogrenciler = json.coz(ham_json)
+basarililar = tablo.filtrele(ogrenciler, "puan", ">=", 80)
+siniflar = tablo.grupla(basarililar, "sinif")
+
+tablo.onizle(basarililar, "Başarılı öğrenciler")
+yaz "Başarılı öğrenci: " + tablo.say(basarililar)
+yaz "Sınıflar: " + kayit.anahtarlar(siniflar)
+yaz "JSON özeti:\\n" + json.yaz(siniflar)`,
+  },
+  {
+    id: "otomasyon",
+    title: "Sabah otomasyonu",
+    subtitle: "İzin, zamanlama ve olay planı",
+    tags: ["zamanla", "izin"],
+    code: `izin uygulama "Tarayıcı"
+izin bildirim "Takvim"
+izin bildirim "Masaüstü"
+
+zamanla "Her iş günü 09:00":
+  akis "Gün başlangıcı":
+    adim "Takvimi izle":
+      bildirim.izle("Takvim")
+
+    adim "Çalışma alanını hazırla":
+      uygulama.ac("Tarayıcı")
+      uyari.gonder("Gün başlangıcı akışı hazır.")
+
+olay "bildirim:takvim":
+  yaz "Takvim bildirimi alındı; akış bekliyor."`,
+  },
   {
     id: "merhaba",
     title: "İlk Nokta",
@@ -771,4 +1116,4 @@ her not icin notlar:
   },
 ];
 
-export const DEFAULT_CODE = NOKTA_EXAMPLES[3].code;
+export const DEFAULT_CODE = NOKTA_EXAMPLES[0].code;

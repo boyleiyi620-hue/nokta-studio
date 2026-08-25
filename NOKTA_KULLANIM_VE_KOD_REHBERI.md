@@ -1,6 +1,6 @@
 # Nokta Studio ve Nokta v0.1 Kullanım–Kod Rehberi
 
-**Durum:** Çalışan tarayıcı tabanlı prototip  
+**Durum:** Çalışan tarayıcı tabanlı prototip, v0.2  
 **Amaç:** Nokta ile kod yazmak, çalıştırmak ve kaynak dosyalarının ne yaptığını anlamak.
 
 > Nokta v0.1, veri ve iş otomasyonunu öğrenilebilir akışlara dönüştürmeyi hedefleyen Türkçe-öncelikli bir dildir. Bu projedeki IDE ve yorumlayıcı, tarayıcıda çalışır; çalıştırılan kod kullanıcının dosya sistemine veya ağına erişmez.
@@ -136,6 +136,81 @@ Nokta v0.1, bilinçli olarak küçük bir dildir. Sınıflar, paketler, dosya si
 
 Bu kapsam, Nokta’nın mevcut prototipinin kullanılamaz olduğu anlamına gelmez. Şu anki sürüm; dilin okunabilirlik, girinti, akış, hata açıklama ve Türkçe-öncelikli sözdizimi kararlarını gerçek kod çalıştırarak doğrulamak için tasarlanmıştır.
 
-## 7. Doğrulama kaydı
+## 7. v0.2 — İzinli otomasyon, zamanlama ve olaylar
 
-Masaüstü görünümde üç bölmeli atölye düzeni; kaynak editörü, yürütme kaydı ve dil kartlarını aynı çalışma bağlamında sunacak biçimde doğrulandı. Küçük ekran görünümünde kenar çubuğu geri çekilir; kod editörü, yürütme kaydı ve dil kartları tek sütunda editör öncelikli bir sıraya geçer. Otomatik testler yerleşik örnekleri, Türkçe değişken adlarını, kayıt alanlarını, akış/adım kaydını ve tanımsız ad hatasını kapsar.
+Nokta v0.2, Python benzeri kısa ifadeleri korurken otomasyon niyetini açık hâle getirir. `izin` dış eylemin hangi hedefe yönelik olduğunu bildirir; `zamanla` periyodik işi kaynak kodda görünür kılar; `olay` ise ileride gerçek bildirime veya API olayına bağlanabilecek bir dinleyici tanımlar. Bu sürümde bunların tamamı **güvenli önizleme** olarak yürütülür: IDE planı ve çalışma kaydını üretir, ancak bilgisayarında uygulama başlatmaz veya bildirimlerini okumaz.
+
+```nokta
+izin uygulama "Tarayıcı"
+izin bildirim "Takvim"
+
+zamanla "Her iş günü 09:00":
+  akis "Gün başlangıcı":
+    bildirim.izle("Takvim")
+    uygulama.ac("Tarayıcı")
+    uyari.gonder("Akış hazır.")
+
+olay "bildirim:takvim":
+  yaz "Takvim olayı bekleniyor."
+```
+
+Yukarıdaki kodda ilk iki satır çalıştırıcının yapabileceği dış eylemleri sınırlar. `zamanla` bloğu bir zamanlama planı üretir; içindeki `akis`, işlem kaydını gruplar. `bildirim.izle`, izleme niyetini; `uygulama.ac`, uygulama başlatma niyetini; `uyari.gonder` ise seçilecek kanala gönderilecek bildirimi planlar. `olay` bloğu tanımlandığında gerçek olay geldiğinde çalışacak akışın sözleşmesini saklar.
+
+| Yeni yapı | Ne işe yarar? | IDE’deki sonucu |
+|---|---|---|
+| `izin` | Dış eylemi hedefe bağlı olarak yetkilendirir | İzin kaydı oluşturur; eksik izni hata olarak gösterir |
+| `zamanla` | Bir akışı zaman ifadesiyle planlar | Zamanlama kartı ve güvenli önizleme oluşturur |
+| `olay` | Bildirim veya servis olayını dinlemek için sözleşme tanımlar | Olay dinleyicisi kartı oluşturur |
+| `uygulama.ac` / `kapat` | Onaylı bir uygulama eylemini tanımlar | Eylemi planlar; gerçek çalıştırıcıya devretmek üzere kaydeder |
+| `bildirim.izle` / `uyari.gonder` | Bildirim kaynağını ve uyarıyı tanımlar | İzleme ve uyarı planını yürütme kaydında gösterir |
+
+Koleksiyon ve veri işlemleri de genişletildi. `liste.ekle`, `liste.ilk`, `liste.son`, `liste.icerir_mi`, `metin.icerir_mi`, `metin.degistir`, `metin.bol`, `sayi.sinirla`, `kayit.anahtarlar` ve `kayit.degerler` doğrudan kullanılabilir. Bunlar, dış otomasyona bağlanmadan önce veriyi hazırlamak için temel araç setini sağlar.
+
+## 8. v0.3 — CSV, JSON ve tablo işlemleri
+
+Nokta v0.3, satır satır veri dönüştürme yerine günlük veri işlerinde doğrudan kullanılabilen bir tablo modeli ekler. `csv.coz` başlıklı CSV metnini kayıtlardan oluşan bir listeye; `json.coz` JSON metnini Nokta listesi veya kaydına dönüştürür. `tablo` modülü ile bu veri filtrelenir, seçilir, sıralanır, gruplanır, toplanır ve IDE içinde örnek satırlarıyla önizlenir. `csv.yaz` ile kayıt listesi CSV’ye, `json.yaz` ile herhangi bir Nokta değeri okunabilir JSON’a dışa aktarılır.
+
+```nokta
+ham_csv = "sehir,tutar,durum\\nAnkara,1200,tamam\\nİzmir,850,bekliyor\\nİstanbul,2400,tamam"
+satislar = csv.coz(ham_csv)
+tamamlanan = tablo.filtrele(satislar, "durum", "==", "tamam")
+sirali = tablo.sirala(tamamlanan, "tutar", "azalan")
+
+tablo.onizle(sirali, "Tamamlanan siparişler")
+yaz "Toplam ciro: " + tablo.topla(sirali, "tutar")
+yaz csv.yaz(tablo.sec(sirali, ["sehir", "tutar"]))
+```
+
+Bu örnek, CSV verisini çözer; yalnızca `tamam` durumundaki satırları seçer; tutara göre büyükten küçüğe sıralar ve IDE’nin sağ panelinde ilk satırları tablolandırır. Son iki satır toplamı hesaplar ve yalnızca seçili sütunlarla yeni bir CSV çıktısı üretir. CSV çözücü; çift tırnak, satır sonu, başlık tekrarı ve hücre sayısı hatalarını denetler. Sayı biçimindeki hücreler otomatik olarak sayıya dönüştürülür.
+
+| Yapı | Görevi | Örnek |
+|---|---|---|
+| `csv.coz` / `csv.yaz` | CSV metnini tabloya çevirir veya tabloyu CSV metni olarak üretir | `csv.coz(ham_csv)` |
+| `json.coz` / `json.yaz` | JSON’u Nokta değerine çevirir veya okunabilir JSON üretir | `json.yaz(gruplar)` |
+| `tablo.filtrele` | Sütuna göre karşılaştırmalı seçim yapar | `tablo.filtrele(veri, "puan", ">=", 80)` |
+| `tablo.sec` | Sadece gerekli sütunları tutar | `tablo.sec(veri, ["ad", "puan"])` |
+| `tablo.sirala` | Metin veya sayı sütununa göre sıralar | `tablo.sirala(veri, "puan", "azalan")` |
+| `tablo.grupla` | Aynı sütun değerine sahip kayıtları bir kayıtta toplar | `tablo.grupla(veri, "sinif")` |
+| `tablo.topla` / `ortalama` | Sayısal bir sütunun özetini hesaplar | `tablo.topla(veri, "tutar")` |
+| `tablo.onizle` | IDE’ye satır ve sütun önizlemesi gönderir | `tablo.onizle(veri, "Rapor")` |
+
+## 9. v0.4 — Yerel dosya, grafik ve onarım notları
+
+Nokta v0.4’te sol taraftaki **Veri Kümeleri** rafından `.csv` veya `.json` dosyası yüklenebilir. Dosya tarayıcı içinde okunur; IDE bu dosyayı bir sunucuya göndermez. Yükleme sonrasında **Ekle** düğmesi, dosya adını kullanan `veri.al` başlangıç ifadesini editöre yerleştirir. Böylece gerçek dosyanın satırları, Nokta’nın mevcut `tablo` komutlarıyla işlenebilir.
+
+```nokta
+satirlar = veri.al("mart_satislari.csv")
+tamamlanan = tablo.filtrele(satirlar, "durum", "==", "tamam")
+tablo.onizle(tamamlanan, "Mart tamamlanan siparişler")
+yaz "Ciro: " + tablo.topla(tamamlanan, "tutar")
+```
+
+`veri.al`, dosya uzantısına göre CSV veya JSON çözümlemesini seçer. `veri.metin("dosya.csv")` ham metni, `veri.dosyalar()` ise bu tarayıcı oturumunda bağlı dosya adlarını döndürür. Yerel veri kümeleri sayfa yenilendiğinde saklanmaz; bu tercih, kişisel verinin tarayıcı dışına çıkmaması ve izin modelinin anlaşılır kalması içindir.
+
+Her `tablo.onizle` çağrısı, sağ paneldeki tablonun altında bir **Görsel Analiz** alanı üretir. Kullanıcı kategori ve sayısal değer sütunlarını seçebilir; çubuk grafik veya pasta grafik arasında geçiş yapabilir. Grafik yalnızca önizlenen satırlardan oluşturulur; veri yükleme sınırı bu yerel önizleme için 1,5 MB’tır.
+
+Kod editörü artık Nokta anahtar sözcüklerini, veri modüllerini, metinleri, sayıları ve yorumları ayrı renklerle vurgular. Hatalar yalnızca bir cümle olarak gösterilmez: Nokta hata kodu, satır bağlamı, açıklama ve onarım önerisi ile bir tanı kartı oluşturur. Örneğin yüklenmemiş bir dosya için `NOKTA_201` tanısı, dosyanın Veri Kümeleri rafından yüklenmesi gerektiğini açıkça belirtir.
+
+## 10. Doğrulama kaydı
+
+Masaüstü görünümde üç bölmeli atölye düzeni; kaynak editörü, yürütme kaydı, otomasyon planı, veri önizlemesi, görsel analiz ve dil kartlarını aynı çalışma bağlamında sunacak biçimde doğrulandı. Küçük ekran görünümünde kenar çubuğu geri çekilir; kod editörü, yürütme kaydı ve dil kartları tek sütunda editör öncelikli bir sıraya geçer. Otomatik testler yerleşik örnekleri, Türkçe değişken adlarını, kayıt alanlarını, akış/adım kaydını, tanımsız ad hatasını, izinli otomasyonu, genişletilmiş veri yardımcılarını, CSV dönüşümünü, tablo önizlemesini, JSON gruplamayı, yüklenmiş veri kümesi bağlamını ve öneri içeren hata tanılarını kapsar.

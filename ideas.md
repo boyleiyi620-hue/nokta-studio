@@ -83,3 +83,9 @@ Logotype, klasik bir serif sözcük işareti ile ince aralıklı yardımcı metn
 ## Uygulama Notları
 
 Bu tasarım kararları, ilgili her bileşen ve stil dosyasının başında kısa yorum olarak tekrar edilecektir. Yeni bir arayüz tercihi yapılmadan önce şu soru sorulur: **“Bu tercih Atölye Defteri yaklaşımını güçlendiriyor mu, yoksa seyreltip sıradanlaştırıyor mu?”**
+
+## Style Decisions
+
+- Yürütme kaydı, adımları kâğıt kenarı notları gibi birbirine bağlayan görünür bir **akış izi** taşır; çalışma kimliği ve satır bağlantıları bu motifin parçasıdır.
+- Sol gezinme, standart yönetim paneli yerine ince mürekkep çizgileri, raf etiketleri ve aktif durumdaki akış işaretiyle bir **atölye rafı** gibi davranır.
+- İç içe nokta/akış logo işareti; çalışma alanı, aktif örnek ve yürütme durumu çevresinde ölçülü bir kimlik mührü olarak tekrar eder.
