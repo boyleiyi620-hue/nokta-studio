@@ -309,7 +309,7 @@ export default function Home() {
                 onScroll={(event) => { if (highlightRef.current) { highlightRef.current.scrollTop = event.currentTarget.scrollTop; highlightRef.current.scrollLeft = event.currentTarget.scrollLeft; } }}
               />
             </div>
-            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v0.4</span></footer>
+            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v0.5</span></footer>
           </section>
 
           <aside className="output-panel" aria-label="Yürütme çıktısı">
