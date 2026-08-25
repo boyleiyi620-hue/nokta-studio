@@ -2,7 +2,7 @@
  * Nokta Studio / Atölye Defteri — ana IDE yüzeyi.
  * Sakin, editoryal, üç bölmeli bir çalışma tezgâhı; kod her zaman ana malzemedir.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   BookOpen,
   Check,
@@ -33,6 +33,14 @@ const toneIcon: Record<ConsoleEntry["tone"], typeof Check> = {
   error: X,
   info: Sparkles,
 };
+
+const studioAsset = (filename: string, manusUrl: string) =>
+  import.meta.env.BASE_URL === "/" ? manusUrl : `${import.meta.env.BASE_URL}nokta-assets/${filename}`;
+
+const paperTexture = studioAsset("nokta-paper-texture.jpg", "/manus-storage/nokta-paper-texture_32790d41.jpg");
+const brandMark = studioAsset("nokta-mark.png", "/manus-storage/nokta-mark_d1842735.png");
+const statusStamps = studioAsset("nokta-status-stamps.png", "/manus-storage/nokta-status-stamps_639c30b1.png");
+const flowSculpture = studioAsset("nokta-flow-sculpture.jpg", "/manus-storage/nokta-flow-sculpture_786ba9a4.jpg");
 
 export default function Home() {
   const [code, setCode] = useState(DEFAULT_CODE);
@@ -85,10 +93,10 @@ export default function Home() {
   }, [code]);
 
   return (
-    <main className="studio-shell">
+    <main className="studio-shell" style={{ "--paper-texture": `url("${paperTexture}")` } as CSSProperties & Record<"--paper-texture", string>}>
       <aside className="studio-sidebar" aria-label="Nokta Studio gezintisi">
         <div className="brand-block">
-          <img src="/manus-storage/nokta-mark_d1842735.png" alt="Nokta işareti" className="brand-mark" />
+          <img src={brandMark} alt="Nokta işareti" className="brand-mark" />
           <div>
             <p className="brand-name">Nokta</p>
             <p className="brand-subtitle">Studio <span>v0.1</span></p>
@@ -123,7 +131,7 @@ export default function Home() {
         </nav>
 
         <div className="sidebar-notice">
-          <img src="/manus-storage/nokta-status-stamps_639c30b1.png" alt="Nokta durum işaretleri" />
+          <img src={statusStamps} alt="Nokta durum işaretleri" />
           <div><strong>Önizleme güvenlidir</strong><span>Bu sürüm tarayıcının dışına veri göndermez.</span></div>
         </div>
       </aside>
@@ -189,7 +197,7 @@ export default function Home() {
           <div className="reference-heading"><div><p className="eyebrow">DİL KARTLARI</p><h3>Bir bakışta Nokta</h3></div><button onClick={() => setIsReferenceOpen((value) => !value)}><CircleHelp size={15} /> {isReferenceOpen ? "Kısa görünüm" : "Tüm sözdizimi"}</button></div>
           <div className="reference-grid">
             {editorFacts.map((fact) => <article className="rule-card" key={fact.key}><span>{fact.key.padStart(2, "0")}</span><h4>{fact.title}</h4><p>{fact.text}</p></article>)}
-            <article className="sculpture-card"><div><span>AKIŞ MANTIĞI</span><p>Bir işi adımlara ayır; her çıktı görünür kalsın.</p></div><img src="/manus-storage/nokta-flow-sculpture_786ba9a4.jpg" alt="Nokta veri akışını temsil eden soyut çalışma" /></article>
+            <article className="sculpture-card"><div><span>AKIŞ MANTIĞI</span><p>Bir işi adımlara ayır; her çıktı görünür kalsın.</p></div><img src={flowSculpture} alt="Nokta veri akışını temsil eden soyut çalışma" /></article>
           </div>
           {isReferenceOpen && <div className="syntax-sheet">
             <div><span>ÇIKTI</span><pre>yaz "Merhaba"</pre><p>Bir değeri yürütme kaydına ekler.</p></div>

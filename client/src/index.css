@@ -192,12 +192,12 @@
 
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
-body { margin: 0; color: var(--ink); background: var(--paper) url("/manus-storage/nokta-paper-texture_32790d41.jpg") center/cover fixed; font-family: var(--font-sans); }
+body { margin: 0; color: var(--ink); background: var(--paper); font-family: var(--font-sans); }
 button, textarea { font: inherit; }
 button { border: 0; }
 button:focus-visible, textarea:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 
-.studio-shell { min-height: 100vh; display: grid; grid-template-columns: 258px minmax(0, 1fr); background: rgba(244, 240, 231, 0.78); }
+.studio-shell { min-height: 100vh; display: grid; grid-template-columns: 258px minmax(0, 1fr); background: rgba(244, 240, 231, 0.78) var(--paper-texture) center/cover fixed; }
 .studio-sidebar { padding: 26px 16px 17px; min-height: 100vh; border-right: 1px solid var(--rule); background: rgba(251, 249, 243, 0.79); backdrop-filter: blur(14px); display: flex; flex-direction: column; }
 .brand-block { padding: 0 8px; display: flex; align-items: center; gap: 11px; }
 .brand-mark { width: 34px; height: 34px; object-fit: contain; }
