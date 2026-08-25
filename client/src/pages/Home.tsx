@@ -269,7 +269,7 @@ export default function Home() {
           <div className="brand-mark-wrap"><img src={brandMark} alt="Nokta işareti" className="brand-mark" /><span className="brand-orbit" aria-hidden="true" /></div>
           <div>
             <p className="brand-name">Nokta</p>
-            <p className="brand-subtitle">Studio <span>v0.6</span></p>
+            <p className="brand-subtitle">Studio <span>v0.7</span></p>
           </div>
         </div>
 
@@ -363,7 +363,7 @@ export default function Home() {
                 onScroll={(event) => { if (highlightRef.current) { highlightRef.current.scrollTop = event.currentTarget.scrollTop; highlightRef.current.scrollLeft = event.currentTarget.scrollLeft; } }}
               />
             </div>
-            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v0.6</span></footer>
+            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v0.7</span></footer>
           </section>
 
           <aside className="output-panel" aria-label="Yürütme çıktısı">
