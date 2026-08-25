@@ -240,3 +240,32 @@ Veri önizleme paneli, çubuk ve pasta grafiklerine ek olarak çizgi ve dağıl�
 Her `tablo.onizle` sonucu, **CSV indir** ve **PNG indir** eylemlerini gösterir. CSV dışa aktarma, önizlemede gösterilen ilk satırlarla sınırlı değildir; o önizlemeyi üreten tüm tablo satırlarını UTF-8 biçiminde indirir. Başlıktaki UTF-8 işareti, Türkçe karakterlerin yaygın hesap tablosu uygulamalarında doğru açılmasına yardımcı olur.
 
 PNG dışa aktarma, seçili görünümü — çubuk, pasta, çizgi veya dağılım — yüksek çözünürlüklü beyaz arka planlı bir dosyaya dönüştürür. Grafik türü veya kategori/değer sütunu değiştirildiğinde indirme eylemi o anda ekranda bulunan görünümü alır. Her iki indirme de tarayıcıda üretilir; veri sunucuya gönderilmez.
+
+## 14. v1.6 — Paketleme ve güvenilir kütüphaneler
+
+Nokta v1.6, tek dosyadaki `modul` ad alanlarını proje düzeyinde yeniden kullanıma açar. Proje kökündeki `nokta.paket.json`, projenin kimliğini, giriş dosyasını, bağımlılıklarını ve talep ettiği izinleri bildirir. `nokta.kilit.json` ise seçilen somut sürümü ve kayıt bütünlük etiketini sabitler. Böylece aynı proje, güvenilir kayıt değişmediği sürece aynı paket yüzeyiyle yürütülür.
+
+| Dosya | Rolü | Bu prototipteki sınır |
+|---|---|---|
+| `nokta.paket.json` | Paket adı, sürüm, giriş, bağımlılıklar ve izinler | IDE’nin örnek proje bildirimiyle aynı sözleşmeyi taşır. |
+| `nokta.kilit.json` | Çözülen sürüm ve bütünlük etiketi | Çalışma zamanındaki derlenmiş kilit kaydının denetlenebilir eşidir. |
+| Güvenilir kayıt | Kullanılabilir paketlerin tanımı ve dışa aktarımları | Tarayıcıya gömülüdür; ağdan paket indirmez. |
+
+Paket, Nokta kaynak kodunda `kullan` ile içe aktarılır. Paket adı ve sürüm aralığı tırnak içinde yazılır; `olarak` sözcüğü paketin çağrılacağı yerel ad alanını tanımlar. Bu v1.6 prototipi, tam sürüm (`1.2.0`), uyumlu ana sürüm (`^1.2`), aynı küçük sürüm (`~1.1`) ve tüm sürümler (`*`) aralıklarını çözebilir.
+
+```nokta
+kullan "istatistik@^1.2" olarak istatistik
+kullan "metin-araclari@~1.1" olarak metin_araclari
+
+puanlar = [72, 88, 91, 76, 95, 84]
+ozet = istatistik.dagilim(puanlar)
+baslik = metin_araclari.baslik("paket çözümleme özeti")
+
+yaz baslik
+yaz "Ortanca: " + istatistik.medyan(puanlar)
+yaz "Ortalama: " + ozet.ortalama
+```
+
+`istatistik` paketi `medyan` ve `dagilim`; `metin-araclari` paketi `baslik`, `temizle` ve `kelime_say` işlevlerini dışa aktarır. Çalıştırıcı önce paketin güvenilir kayıtta bulunup bulunmadığını, sonra `nokta.paket.json` içindeki bağımlılık bildiriminin uygunluğunu, ardından kilit sürümünü ve dışa aktarılan adların bütünlük etiketini denetler. Başarılı çözüm sağ panelde paket adı, sürümü ve takma adıyla kaydedilir.
+
+> Bu aşama gerçek bir genel paket deposu veya internetten indirme sistemi değildir. Paket arşivi indirme, yayıncı imzası, özel kurum kaydı ve paket kaynağının kriptografik doğrulanması sonraki aşamada eklenmelidir. v1.6’daki bütünlük etiketi, tarayıcı içindeki güvenilir kaydın dışa aktarımlarını tutarlı tutan uygulama düzeyi bir korumadır.

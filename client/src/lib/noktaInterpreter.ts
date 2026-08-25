@@ -16,6 +16,7 @@ export interface RunResult {
   entries: ConsoleEntry[];
   plans: AutomationPlan[];
   previews: DataPreview[];
+  packages: ResolvedPackage[];
   diagnostics: Diagnostic[];
   ok: boolean;
   duration: number;
@@ -42,6 +43,8 @@ export interface DatasetSource {
 
 export interface RunOptions {
   datasets?: Record<string, DatasetSource>;
+  registry?: LibraryRegistry;
+  manifest?: PackageManifest;
 }
 
 export interface Diagnostic {
@@ -55,6 +58,101 @@ type Primitive = string | number | boolean | null;
 type RuntimeValue = Primitive | RuntimeValue[] | RuntimeRecord | NativeFunction | NoktaFunction;
 type RuntimeRecord = { [key: string]: RuntimeValue };
 type NativeFunction = (...args: RuntimeValue[]) => RuntimeValue;
+
+export interface PackageManifest {
+  ad: string;
+  surum: string;
+  giris: string;
+  bagimliliklar: Record<string, string>;
+  izinler: string[];
+}
+
+export interface LibraryPackage {
+  ad: string;
+  surum: string;
+  aciklama: string;
+  integrity: string;
+  izinler: string[];
+  exports: RuntimeRecord;
+}
+
+export type LibraryRegistry = Record<string, LibraryPackage>;
+
+export interface PackageLockfile {
+  bicim: 1;
+  paketler: Record<string, { surum: string; integrity: string }>;
+}
+
+export interface ResolvedPackage {
+  ad: string;
+  surum: string;
+  istek: string;
+  takmaAd: string;
+  integrity: string;
+  izinler: string[];
+}
+
+export const NOKTA_PACKAGE_MANIFEST: PackageManifest = {
+  ad: "nokta-veri-atolyesi",
+  surum: "1.6.0",
+  giris: "akis.nokta",
+  bagimliliklar: { istatistik: "^1.2.0", "metin-araclari": "~1.1.0" },
+  izinler: ["veri:yerel"],
+};
+
+export const NOKTA_LOCKFILE: PackageLockfile = {
+  bicim: 1,
+  paketler: {
+    istatistik: { surum: "1.2.0", integrity: "nokta-kayit:istatistik@1.2.0:dagilim,medyan" },
+    "metin-araclari": { surum: "1.1.0", integrity: "nokta-kayit:metin-araclari@1.1.0:baslik,kelime_say,temizle" },
+  },
+};
+
+export const NOKTA_LIBRARY_CATALOG: LibraryRegistry = {
+  istatistik: {
+    ad: "istatistik",
+    surum: "1.2.0",
+    aciklama: "Sayısal listeler için medyan ve dağılım yardımcıları.",
+    integrity: "nokta-kayit:istatistik@1.2.0:dagilim,medyan",
+    izinler: [],
+    exports: {
+      medyan: ((value) => {
+        if (!Array.isArray(value)) throw new NoktaError(0, "istatistik.medyan bir sayı listesi bekliyor.");
+        const numbers = value.map((item) => asNumber(item, 0)).sort((left, right) => left - right);
+        if (numbers.length === 0) return 0;
+        const middle = Math.floor(numbers.length / 2);
+        return numbers.length % 2 === 0 ? (numbers[middle - 1] + numbers[middle]) / 2 : numbers[middle];
+      }) as NativeFunction,
+      dagilim: ((value) => {
+        if (!Array.isArray(value)) throw new NoktaError(0, "istatistik.dagilim bir sayı listesi bekliyor.");
+        const numbers = value.map((item) => asNumber(item, 0));
+        const total = numbers.reduce((sum, item) => sum + item, 0);
+        return { adet: numbers.length, toplam: total, ortalama: numbers.length ? total / numbers.length : 0, en_kucuk: numbers.length ? Math.min(...numbers) : 0, en_buyuk: numbers.length ? Math.max(...numbers) : 0 };
+      }) as NativeFunction,
+    },
+  },
+  "metin-araclari": {
+    ad: "metin-araclari",
+    surum: "1.1.0",
+    aciklama: "Başlıklaştırma, boşluk temizleme ve kelime sayımı yardımcıları.",
+    integrity: "nokta-kayit:metin-araclari@1.1.0:baslik,kelime_say,temizle",
+    izinler: [],
+    exports: {
+      baslik: ((value) => {
+        if (typeof value !== "string") throw new NoktaError(0, "metin-araclari.baslik bir metin bekliyor.");
+        return value.toLocaleLowerCase("tr").split(/\s+/).filter(Boolean).map((word) => word[0]?.toLocaleUpperCase("tr") + word.slice(1)).join(" ");
+      }) as NativeFunction,
+      temizle: ((value) => {
+        if (typeof value !== "string") throw new NoktaError(0, "metin-araclari.temizle bir metin bekliyor.");
+        return value.trim().replace(/\s+/g, " ");
+      }) as NativeFunction,
+      kelime_say: ((value) => {
+        if (typeof value !== "string") throw new NoktaError(0, "metin-araclari.kelime_say bir metin bekliyor.");
+        return value.trim() ? value.trim().split(/\s+/).length : 0;
+      }) as NativeFunction,
+    },
+  },
+};
 
 interface SourceLine {
   content: string;
@@ -88,6 +186,7 @@ type Statement =
   | { type: "permission"; domain: string; target: Expression; line: number }
   | { type: "schedule"; title: Expression; body: Statement[]; line: number }
   | { type: "event"; title: Expression; body: Statement[]; line: number }
+  | { type: "import"; request: string; alias: string; line: number }
   | { type: "module"; name: string; body: Statement[]; line: number }
   | { type: "function"; name: string; parameters: string[]; body: Statement[]; line: number }
   | { type: "return"; expression: Expression; line: number }
@@ -440,6 +539,11 @@ class ProgramParser {
   private parseStatement(): Statement {
     const source = this.lines[this.index];
     const { content, line } = source;
+    const packageImport = content.match(/^kullan\s+"([^"@]+)@([^"\s]+)"\s+olarak\s+([A-Za-z_ÇĞİÖŞÜçğıöşü][A-Za-z0-9_ÇĞİÖŞÜçğıöşü]*)\s*$/);
+    if (packageImport) {
+      this.index += 1;
+      return { type: "import", request: `${packageImport[1]}@${packageImport[2]}`, alias: packageImport[3], line };
+    }
     if (content.startsWith("yaz ")) {
       this.index += 1;
       return { type: "output", expression: parseExpression(content.slice(4), line), line };
@@ -530,8 +634,32 @@ class Runtime {
   readonly entries: ConsoleEntry[] = [];
   readonly plans: AutomationPlan[] = [];
   readonly previews: DataPreview[] = [];
+  readonly packages: ResolvedPackage[] = [];
   private readonly permissions = new Set<string>();
   private operations = 0;
+
+  constructor(
+    private readonly registry: LibraryRegistry = NOKTA_LIBRARY_CATALOG,
+    private readonly manifest: PackageManifest = NOKTA_PACKAGE_MANIFEST,
+  ) {}
+
+  resolvePackage(request: string, alias: string, environment: Environment, line: number) {
+    const at = request.lastIndexOf("@");
+    const name = request.slice(0, at);
+    const range = request.slice(at + 1);
+    const library = this.registry[name];
+    if (!library) throw new NoktaError(line, `“${name}” paketi güvenilir kayıt içinde bulunamadı.`, "NOKTA_401", "Paket adını kontrol edin veya güvenilir kayda imzalı bir sürüm ekleyin.");
+    const declaredRange = this.manifest.bagimliliklar[name];
+    if (!declaredRange) throw new NoktaError(line, `“${name}” paketi nokta.paket.json içinde bildirilmemiş.`, "NOKTA_400", "Önce manifestin bagimliliklar alanına paket adını ve sürüm aralığını ekleyin.");
+    if (!versionSatisfies(library.surum, range) || !versionSatisfies(library.surum, declaredRange)) throw new NoktaError(line, `“${name}” için ${range} istendi; kayıtlı sürüm ${library.surum}.`, "NOKTA_402", "Manifestte desteklenen bir sürüm aralığı kullanın ya da güvenilir kaydı güncelleyin.");
+    const locked = NOKTA_LOCKFILE.paketler[name];
+    if (!locked || locked.surum !== library.surum || locked.integrity !== library.integrity || library.integrity !== packageIntegrity(library)) {
+      throw new NoktaError(line, `“${name}” paketinin kilit kaydı veya bütünlük etiketi doğrulanamadı.`, "NOKTA_403", "Paket kilidini güvenilir kayıtla yeniden oluşturun; tanımsız paket içeriğini çalıştırmayın.");
+    }
+    environment.define(alias, library.exports);
+    this.packages.push({ ad: library.ad, surum: library.surum, istek: range, takmaAd: alias, integrity: library.integrity, izinler: library.izinler });
+    this.entries.push({ tone: "info", line, text: `Paket çözüldü — ${library.ad}@${library.surum} → ${alias}` });
+  }
 
   grantPermission(domain: string, target: string, line: number) {
     this.permissions.add(`${domain}:${target}`);
@@ -636,6 +764,9 @@ class Runtime {
         this.entries.push({ tone: "automation", line: statement.line, text: `Olay dinleyicisi hazır — ${title}` });
         return { kind: "normal" };
       }
+      case "import":
+        this.resolvePackage(statement.request, statement.alias, environment, statement.line);
+        return { kind: "normal" };
       case "module": {
         const moduleEnvironment = new Environment(environment);
         const result = this.executeBlock(statement.body, moduleEnvironment);
@@ -895,6 +1026,48 @@ function createGlobals(runtime: Runtime, datasets: Record<string, DatasetSource>
       const numbers = table.map((row) => asNumber(getRecordField(row, name), 0));
       return { satir_sayisi: table.length, toplam: numbers.reduce((sum, item) => sum + item, 0), ortalama: numbers.length ? numbers.reduce((sum, item) => sum + item, 0) / numbers.length : 0, en_kucuk: numbers.length ? Math.min(...numbers) : 0, en_buyuk: numbers.length ? Math.max(...numbers) : 0 };
     }) as NativeFunction,
+    dogrula: ((value, rules) => {
+      const table = ensureTable(value);
+      if (!isRecord(rules)) throw new NoktaError(0, "tablo.dogrula için alan kurallarını kayıt olarak verin.", "NOKTA_151", "Örnek: { puan: { zorunlu: dogru, tip: \"sayi\", min: 0 } }");
+      const errors: RuntimeValue[] = [];
+      table.forEach((row, rowIndex) => Object.entries(rules).forEach(([field, rawRule]) => {
+        if (!isRecord(rawRule)) throw new NoktaError(0, `“${field}” doğrulama kuralı kayıt olmalı.`);
+        const current = getRecordField(row, field);
+        const required = rawRule.zorunlu === true;
+        const expectedType = rawRule.tip;
+        const empty = current === null || current === undefined || current === "";
+        const addError = (reason: string) => errors.push({ satir: rowIndex + 1, alan: field, deger: current ?? null, neden: reason });
+        if (required && empty) { addError("zorunlu alan boş"); return; }
+        if (empty) return;
+        if (expectedType === "sayi" && typeof current !== "number") addError("sayı bekleniyor");
+        if (expectedType === "metin" && typeof current !== "string") addError("metin bekleniyor");
+        if (expectedType === "mantik" && typeof current !== "boolean") addError("mantıksal değer bekleniyor");
+        if (typeof current === "number" && typeof rawRule.min === "number" && current < rawRule.min) addError(`${rawRule.min} alt sınırının altında`);
+        if (typeof current === "number" && typeof rawRule.max === "number" && current > rawRule.max) addError(`${rawRule.max} üst sınırının üzerinde`);
+        if (typeof current === "string" && typeof rawRule.min_uzunluk === "number" && current.length < rawRule.min_uzunluk) addError(`${rawRule.min_uzunluk} karakterden kısa`);
+      }));
+      const result = { gecerli: errors.length === 0, satir_sayisi: table.length, hata_sayisi: errors.length, hatalar: errors };
+      runtime.entries.push({ tone: errors.length ? "error" : "success", text: errors.length ? `Veri doğrulaması tamamlandı — ${errors.length} hata bulundu` : `Veri doğrulaması tamamlandı — ${table.length} satır geçerli` });
+      return result;
+    }) as NativeFunction,
+    donustur: ((value, field, target) => {
+      const table = ensureTable(value);
+      const name = onlyText(field);
+      const conversion = onlyText(target);
+      return table.map((row) => {
+        const source = getRecordField(row, name);
+        let converted: RuntimeValue = source;
+        if (conversion === "sayi") {
+          const parsed = typeof source === "number" ? source : Number(typeof source === "string" ? source.replace(",", ".") : source);
+          if (!Number.isFinite(parsed)) throw new NoktaError(0, `“${name}” alanındaki “${formatValue(source)}” sayı türüne dönüştürülemedi.`, "NOKTA_152", "Sayısal olmayan değerleri doğrulayın veya dönüşümden önce filtreleyin.");
+          converted = parsed;
+        } else if (conversion === "metin") converted = formatValue(source);
+        else if (conversion === "mantik") converted = source === true || source === "doğru" || source === "true" || source === 1;
+        else if (conversion === "trim") converted = onlyText(formatValue(source)).trim();
+        else throw new NoktaError(0, `“${conversion}” dönüşümü desteklenmiyor.`, "NOKTA_153", "sayi, metin, mantik veya trim kullanın.");
+        return { ...row, [name]: converted };
+      });
+    }) as NativeFunction,
     onizle: ((value, title = "Tablo") => {
       const table = ensureTable(value);
       runtime.addPreview(onlyText(title), table);
@@ -971,6 +1144,22 @@ function createGlobals(runtime: Runtime, datasets: Record<string, DatasetSource>
 
 function isIdentifierStart(value: string) { return /^[A-Za-z_ÇĞİÖŞÜçğıöşü]$/.test(value); }
 function isIdentifierPart(value: string) { return /^[A-Za-z0-9_ÇĞİÖŞÜçğıöşü]$/.test(value); }
+function versionSatisfies(version: string, range: string) {
+  if (range === "*" || range === "") return true;
+  const parse = (value: string): [number, number, number] => {
+    const values = value.split(".").map((item) => Number(item) || 0);
+    return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0];
+  };
+  const [major, minor, patch] = parse(version);
+  const normalized = range.replace(/^[~^]/, "");
+  const [requiredMajor, requiredMinor, requiredPatch] = parse(normalized);
+  if (range.startsWith("^")) return major === requiredMajor && (minor > requiredMinor || (minor === requiredMinor && patch >= requiredPatch));
+  if (range.startsWith("~")) return major === requiredMajor && minor === requiredMinor && patch >= requiredPatch;
+  return major === requiredMajor && minor === requiredMinor && patch === requiredPatch;
+}
+function packageIntegrity(library: LibraryPackage) {
+  return `nokta-kayit:${library.ad}@${library.surum}:${Object.keys(library.exports).sort().join(",")}`;
+}
 function isTruthy(value: RuntimeValue) { return value !== false && value !== null && value !== 0 && value !== ""; }
 function isRecord(value: RuntimeValue): value is RuntimeRecord { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function asNumber(value: RuntimeValue, line: number): number {
@@ -1080,17 +1269,17 @@ export function formatValue(value: RuntimeValue): string {
 
 export function runNokta(source: string, options: RunOptions = {}): RunResult {
   const started = performance.now();
-  const runtime = new Runtime();
+  const runtime = new Runtime(options.registry ?? NOKTA_LIBRARY_CATALOG, options.manifest ?? NOKTA_PACKAGE_MANIFEST);
   try {
     const program = new ProgramParser(normalizeSource(source)).parse();
     const signal = runtime.executeBlock(program, createGlobals(runtime, options.datasets));
     if (signal.kind === "stop") runtime.entries.push({ tone: "info", text: signal.value ? `Akış durdu — ${formatValue(signal.value)}` : "Akış durdu." });
-    return { entries: runtime.entries, plans: runtime.plans, previews: runtime.previews, diagnostics: [], ok: true, duration: performance.now() - started };
+    return { entries: runtime.entries, plans: runtime.plans, previews: runtime.previews, packages: runtime.packages, diagnostics: [], ok: true, duration: performance.now() - started };
   } catch (error) {
     const details = error instanceof NoktaError ? error : new NoktaError(0, "Bilinmeyen bir çalışma hatası oluştu.");
     const diagnostic = { code: details.code, line: details.line || undefined, message: details.message, suggestion: details.suggestion };
     runtime.entries.push({ tone: "error", line: details.line || undefined, text: `[${details.code}] ${details.message}` });
-    return { entries: runtime.entries, plans: runtime.plans, previews: runtime.previews, diagnostics: [diagnostic], ok: false, duration: performance.now() - started };
+    return { entries: runtime.entries, plans: runtime.plans, previews: runtime.previews, packages: runtime.packages, diagnostics: [diagnostic], ok: false, duration: performance.now() - started };
   }
 }
 
@@ -1103,6 +1292,32 @@ export interface NoktaExample {
 }
 
 export const NOKTA_EXAMPLES: NoktaExample[] = [
+  {
+    id: "veri-kalite",
+    title: "Veri kalite kapısı",
+    subtitle: "Alanları dönüştür, kuralları denetle ve hataları topla",
+    tags: ["dogrula", "donustur", "veri-kalite"],
+    code: "# Gelen metin alanlarını temizle, sayıya dönüştür ve kalite raporu üret.\nham = [{ ad: \" Ada \", puan: \"92\" }, { ad: \"\", puan: \"140\" }, { ad: \"Efe\", puan: \"78\" }]\ntemiz = tablo.donustur(ham, \"ad\", \"trim\")\nsayisal = tablo.donustur(temiz, \"puan\", \"sayi\")\n\nkurallar = { ad: { zorunlu: dogru, tip: \"metin\", min_uzunluk: 2 }, puan: { zorunlu: dogru, tip: \"sayi\", min: 0, max: 100 } }\n\ndenetim = tablo.dogrula(sayisal, kurallar)\nyaz \"Geçerli mi: \" + denetim.gecerli\nyaz \"Hata sayısı: \" + denetim.hata_sayisi\nyaz \"Hata ayrıntıları: \" + json.yaz(denetim.hatalar)",
+  },
+  {
+    id: "paket-analizi",
+    title: "Paket ile veri analizi",
+    subtitle: "Güvenilir kayıttan kütüphane çöz ve kullan",
+    tags: ["kullan", "paket", "semver"],
+    code: `# Paketler yalnızca güvenilir IDE kaydından çözülür.
+kullan "istatistik@^1.2" olarak istatistik
+kullan "metin-araclari@~1.1" olarak metin
+
+puanlar = [72, 88, 91, 76, 95, 84]
+dagilim = istatistik.dagilim(puanlar)
+ortanca = istatistik.medyan(puanlar)
+baslik = metin.baslik("v1 6 paket çözümleme özeti")
+
+yaz baslik
+yaz "Ortanca: " + ortanca
+yaz "Ortalama: " + dagilim.ortalama
+yaz "Aralık: " + dagilim.en_kucuk + " - " + dagilim.en_buyuk`,
+  },
   {
     id: "veri-baslangic",
     title: "CSV + JSON başlangıcı",

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Büyük listeler kontrollü işlenir</title>
+<style>
+*{box-sizing:border-box;margin:0}.slide-container{width:1280px;min-height:720px;background:#F0F9FF;color:#082F49;font-family:Arial,sans-serif;position:relative}.grid{position:absolute;inset:44px 62px;background-image:linear-gradient(to right,rgba(2,132,199,.16) 1px,transparent 1px),linear-gradient(to bottom,rgba(2,132,199,.11) 1px,transparent 1px);background-size:96px 100%,100% 58px}.header{position:relative;padding:68px 86px 0}.kicker{font-size:12px;color:#0284C7;font-weight:800;letter-spacing:2.3px}.header h1{font-size:43px;letter-spacing:-1px;margin-top:12px}.header p{font-size:18px;color:#0C4A6E;font-weight:300;margin-top:12px}.code-panel{position:absolute;left:86px;top:204px;width:445px;height:390px;background:#082F49;border:1px solid #082F49;color:#DFF3FF;padding:22px 24px 0}.code-label{font-size:10px;letter-spacing:1.8px;color:#7DD3FC;font-weight:800}.code{margin-top:18px;font-family:monospace;font-size:14px;line-height:1.86;white-space:pre;color:#C7E9FA}.kw{color:#7DD3FC;font-weight:700}.mod{color:#F6C878}.comment{color:#7DADB9;font-style:italic}.process{position:absolute;left:594px;top:219px;width:600px;height:348px}.rail{position:absolute;top:120px;left:29px;right:26px;border-top:1px dashed #0284C7}.step{position:absolute;top:73px;width:126px;height:150px;border:1px solid rgba(2,132,199,.48);background:rgba(255,255,255,.57);padding:18px 13px 0}.step:before{content:"";position:absolute;top:39px;left:-20px;width:18px;border-top:1px dashed #0284C7}.step:first-of-type:before{display:none}.s1{left:0}.s2{left:151px}.s3{left:302px}.s4{left:453px}.badge{width:28px;height:28px;background:#0284C7;color:#F0F9FF;display:grid;place-items:center;font-size:12px;font-weight:800}.step h2{font-size:18px;margin-top:18px}.step p{font-size:12px;line-height:1.38;color:#0C4A6E;margin-top:8px}.step small{position:absolute;bottom:15px;left:13px;font-family:monospace;font-size:9px;letter-spacing:.8px;color:#0284C7}.note{position:absolute;left:594px;bottom:105px;width:600px;border-top:1px solid rgba(2,132,199,.46);padding-top:13px;color:#0C4A6E;font-size:14px;line-height:1.45}.note b{color:#0284C7}.page{position:absolute;right:86px;bottom:55px;font-size:12px;letter-spacing:2px;color:#0C4A6E}
+</style>
+</head>
+<body>
+<div class="slide-container"><div class="grid"></div><header class="header"><div class="kicker">06 / ÖLÇEKLİ VERİ AKIŞI</div><h1>Büyük listeler kontrollü işlenir</h1><p>Veriyi tek seferde ezberlemeye çalışmak yerine, anlamlı ve denetlenebilir parçalara ayırın.</p></header><section class="code-panel"><div class="code-label">NOKTA KODU / BÜYÜK VERİ</div><div class="code"><span class="comment"># Tekrarlananları azalt</span>
+essiz = <span class="mod">liste.essiz</span>(satirlar)
+
+<span class="comment"># 500 kayıttan oluşan parçalar</span>
+parcalar = <span class="mod">liste.parcala</span>(essiz, 500)
+
+<span class="comment"># İkinci 100 kayıtlık sayfa</span>
+sayfa = <span class="mod">liste.sayfala</span>(essiz, 2, 100)
+
+ozet = <span class="mod">tablo.ozet</span>(satislar, <span class="mod">"tutar"</span>)
+<span class="kw">yaz</span> ozet.ortalama</div></section><section class="process"><div class="rail"></div><article class="step s1"><div class="badge">01</div><h2>Essiz</h2><p>Tekrarlanan değerleri azaltır.</p><small>liste.essiz</small></article><article class="step s2"><div class="badge">02</div><h2>Parçala</h2><p>Listeyi öngörülebilir boyutlara böler.</p><small>liste.parcala</small></article><article class="step s3"><div class="badge">03</div><h2>Sayfala</h2><p>İstenen bölüm ve toplam kaydı görünür kılar.</p><small>liste.sayfala</small></article><article class="step s4"><div class="badge">04</div><h2>Özet</h2><p>Toplam, ortalama ve uç değerleri çıkarır.</p><small>tablo.ozet</small></article></section><div class="note"><b>Çalışma ilkesi:</b> Her aşama ayrı değişkende saklanır; böylece hangi dönüşümün sonucu değiştirdiği akış izinden ve koddan birlikte takip edilir.</div><div class="page">07 / 11</div></div>
+</body>
+</html>

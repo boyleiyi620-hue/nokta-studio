@@ -1,0 +1,13 @@
+{
+  "bicim": 1,
+  "paketler": {
+    "istatistik": {
+      "surum": "1.2.0",
+      "integrity": "nokta-kayit:istatistik@1.2.0:dagilim,medyan"
+    },
+    "metin-araclari": {
+      "surum": "1.1.0",
+      "integrity": "nokta-kayit:metin-araclari@1.1.0:baslik,kelime_say,temizle"
+    }
+  }
+}

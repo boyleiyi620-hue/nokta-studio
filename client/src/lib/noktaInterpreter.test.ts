@@ -137,4 +137,51 @@ yaz json.yaz(gruplar)`);
     expect(result.entries.map((entry) => entry.text)).toContain("2750");
     expect(result.entries.some((entry) => entry.text.includes("Modül hazır — finans"))).toBe(true);
   });
+
+  it("güvenilir kayıttan semver aralığıyla paket çözer ve dışa aktarılan işlevi çağırır", () => {
+    const result = runNokta("kullan \"istatistik@^1.2\" olarak istatistik\npuanlar = [70, 85, 90, 95]\nyaz istatistik.medyan(puanlar)\nyaz istatistik.dagilim(puanlar).ortalama");
+
+    expect(result.ok).toBe(true);
+    expect(result.packages).toEqual([{ ad: "istatistik", surum: "1.2.0", istek: "^1.2", takmaAd: "istatistik", integrity: "nokta-kayit:istatistik@1.2.0:dagilim,medyan", izinler: [] }]);
+    expect(result.entries.map((entry) => entry.text)).toContain("87.5");
+  });
+
+  it("kayıtta olmayan paket için açıklayıcı tanı üretir", () => {
+    const result = runNokta("kullan \"bilinmeyen@^1.0\" olarak arac");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics[0]).toMatchObject({ code: "NOKTA_401" });
+  });
+
+  it("uyuşmayan paket sürüm aralığını reddeder", () => {
+    const result = runNokta("kullan \"istatistik@^2.0\" olarak istatistik");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics[0]).toMatchObject({ code: "NOKTA_402" });
+  });
+
+  it("manifestte bildirilmemiş güvenilir paketi içe aktarmayı reddeder", () => {
+    const result = runNokta("kullan \"istatistik@^1.2\" olarak istatistik", {
+      manifest: { ad: "dar-proje", surum: "1.0.0", giris: "akis.nokta", bagimliliklar: {}, izinler: [] },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics[0]).toMatchObject({ code: "NOKTA_400" });
+  });
+
+  it("tablo alanlarını dönüştürür ve şemaya göre tüm hataları toplar", () => {
+    const result = runNokta("satirlar = [{ ad: \" Ada \", puan: \"92\" }, { ad: \"\", puan: \"140\" }]\ntemiz = tablo.donustur(satirlar, \"ad\", \"trim\")\nsayisal = tablo.donustur(temiz, \"puan\", \"sayi\")\ndenetim = tablo.dogrula(sayisal, { ad: { zorunlu: dogru, tip: \"metin\", min_uzunluk: 2 }, puan: { zorunlu: dogru, tip: \"sayi\", min: 0, max: 100 } })\nyaz denetim.gecerli\nyaz denetim.hata_sayisi");
+
+    expect(result.ok).toBe(true);
+    expect(result.entries.map((entry) => entry.text)).toContain("yanlış");
+    expect(result.entries.map((entry) => entry.text)).toContain("2");
+    expect(result.entries.some((entry) => entry.text.includes("2 hata bulundu"))).toBe(true);
+  });
+
+  it("anlaşılamayan dönüşüm için onarılabilir Nokta tanısı üretir", () => {
+    const result = runNokta("satirlar = [{ puan: \"bilinmiyor\" }]\ntablo.donustur(satirlar, \"puan\", \"sayi\")");
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics[0]).toMatchObject({ code: "NOKTA_152" });
+  });
 });

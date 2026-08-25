@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1787670414293,
+      "tag": "0000_wide_tombstone",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1787671226137,
+      "tag": "0001_fixed_impossible_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1787672196665,
+      "tag": "0002_kind_warstar",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "project_info": {
+    "title": "Nokta Studio",
+    "created": 1787666861.522,
+    "last_updated": 1787667198.784,
+    "total_slides": 11
+  },
+  "slides": [
+    {
+      "id": "cover",
+      "state": "edited",
+      "pageNum": 1
+    },
+    {
+      "id": "oda",
+      "state": "edited",
+      "pageNum": 2
+    },
+    {
+      "id": "workbench",
+      "state": "edited",
+      "pageNum": 3
+    },
+    {
+      "id": "execution",
+      "state": "edited",
+      "pageNum": 4
+    },
+    {
+      "id": "data",
+      "state": "edited",
+      "pageNum": 5
+    },
+    {
+      "id": "charts",
+      "state": "edited",
+      "pageNum": 6
+    },
+    {
+      "id": "large_data",
+      "state": "edited",
+      "pageNum": 7
+    },
+    {
+      "id": "modules",
+      "state": "edited",
+      "pageNum": 8
+    },
+    {
+      "id": "permissions",
+      "state": "edited",
+      "pageNum": 9
+    },
+    {
+      "id": "workflow",
+      "state": "edited",
+      "pageNum": 10
+    },
+    {
+      "id": "closing",
+      "state": "edited",
+      "pageNum": 11
+    }
+  ],
+  "outline": [
+    {
+      "id": "cover",
+      "title": "Nokta Studio",
+      "summary": "Nokta Studio’nun veri ve otomasyon odaklı kullanım kılavuzuna kapak sayfası.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "oda",
+      "title": "Nokta’nın odağı",
+      "summary": "Nokta’nın anlaşılır veri ve otomasyon akışları için konumunu açıklar.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "workbench",
+      "title": "Üç yüzey, tek çalışma bağlamı",
+      "summary": "Sol raf, merkez editör ve sağ akış izinden oluşan IDE düzenini anlatır.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "execution",
+      "title": "Kod akış kaydına dönüşür",
+      "summary": "Akış, adım ve çıktı sözdiziminin IDE yürütme kaydıyla ilişkisini gösterir.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "data",
+      "title": "CSV ve JSON doğrudan tablodur",
+      "summary": "CSV/JSON çözme, filtreleme, önizleme ve özet çıkarma akışını gösterir.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "charts",
+      "title": "Aynı tablo, dört analiz görünümü",
+      "summary": "Çubuk, pasta, çizgi ve dağılım grafikleri ile otomatik özet istatistiklerini açıklar.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "large_data",
+      "title": "Büyük listeler kontrollü işlenir",
+      "summary": "Benzersizleştirme, parçalama, sayfalama ve tablo özetlerini tanıtır.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "modules",
+      "title": "Modüller özel işlevleri düzenler",
+      "summary": "Modül ad alanı, özel işlev ve dönüş sözdizimini ileri seviye örnekle anlatır.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "permissions",
+      "title": "Yerel dosya eylemleri açık izne bağlıdır",
+      "summary": "İzinler, Windows yerel yardımcı ve HTTPS eşleştirme güvenlik modelini açıklar.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "workflow",
+      "title": "İlk raporu beş adımda oluşturun",
+      "summary": "Dosya yüklemeden grafik ve akış kaydı incelemesine kadar uygulama akışını verir.",
+      "image_plan": "Use a suitable image if needed"
+    },
+    {
+      "id": "closing",
+      "title": "Nokta ile sonraki adım",
+      "summary": "Nokta’nın temel kullanım vaadini kısa kapanış mesajıyla tamamlar.",
+      "image_plan": "Use a suitable image if needed"
+    }
+  ]
+}

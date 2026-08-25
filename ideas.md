@@ -89,3 +89,10 @@ Bu tasarım kararları, ilgili her bileşen ve stil dosyasının başında kısa
 - Yürütme kaydı, adımları kâğıt kenarı notları gibi birbirine bağlayan görünür bir **akış izi** taşır; çalışma kimliği ve satır bağlantıları bu motifin parçasıdır.
 - Sol gezinme, standart yönetim paneli yerine ince mürekkep çizgileri, raf etiketleri ve aktif durumdaki akış işaretiyle bir **atölye rafı** gibi davranır.
 - İç içe nokta/akış logo işareti; çalışma alanı, aktif örnek ve yürütme durumu çevresinde ölçülü bir kimlik mührü olarak tekrar eder.
+- Editörün boş alanı, satır ritmi ve sessiz işlem notlarıyla bir çalışma yüzeyi olarak kalır; siyah bir terminal boşluğu gibi davranmaz.
+- Akış izi; aktif örnek, belge kimliği, yürütme kaydı ve ders kartları arasında Nokta’nın ana imza deseni olarak tekrar eder.
+- Açıklama kartları, teknik ders notu görünümünü korur; çizgisel, numaralı ve sakin öğretici dille düzenlenir.
+- Uzun sayfalarda merkezdeki çalışma masası, sol rafın algılanan kaydırma derinliğiyle dengeli kalır; boş kâğıt alanı yalnızca bilinçli bir çalışma yüzeyi olarak çerçevelendiğinde kullanılır.
+- Öğretim alanları SaaS özellik kartı değil, ince mürekkep çizgileri, tek aralıklı kenar notları ve sıralı akış işaretleri taşıyan not defteri folyolarıdır.
+- Yükleme ve hazırlık durumları dahi Atölye Defteri sistemini taşır: Nokta sözcük işareti, ince mürekkep çerçevesi, kâğıt dokusu, yeşil etkin sinyal ve kesikli akış izi görünür kalır.
+- Kayıt merkezi bir paket rafı, paket ayrıntısı ise bir inceleme föyü gibi çerçevelenir; ikisi ortak kimliği korurken farklı çalışma niyetlerini yansıtır.

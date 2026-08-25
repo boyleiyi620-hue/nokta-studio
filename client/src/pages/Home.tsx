@@ -17,6 +17,8 @@ import {
   FileCode2,
   FolderTree,
   Keyboard,
+  PackageCheck,
+  PackageOpen,
   Play,
   PieChart as PieChartIcon,
   RotateCcw,
@@ -30,7 +32,9 @@ import {
   X,
 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
-import { DEFAULT_CODE, formatValue, NOKTA_EXAMPLES, type ConsoleEntry, type DataPreview, type DatasetSource, runNokta } from "@/lib/noktaInterpreter";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Link } from "wouter";
+import { DEFAULT_CODE, formatValue, NOKTA_EXAMPLES, NOKTA_LIBRARY_CATALOG, NOKTA_PACKAGE_MANIFEST, type ConsoleEntry, type DataPreview, type DatasetSource, runNokta } from "@/lib/noktaInterpreter";
 
 const editorFacts = [
   { key: "1", title: "Girinti blok oluşturur", text: "Koşul, döngü ve adım gövdelerinde iki boşluk kullan." },
@@ -59,7 +63,7 @@ const flowSculpture = studioAsset("nokta-flow-sculpture.jpg", "/manus-storage/no
 const chartColors = ["#276D57", "#BD8550", "#4B806E", "#D0AA72", "#193C32", "#7DA28E"];
 
 function highlightNokta(source: string) {
-  const token = /(#.*$)|("(?:[^"\\]|\\.)*")|\b(izin|zamanla|olay|akis|adim|eger|degilse|her|icin|modul|islev|dondur|dur|yaz)\b|\b(csv|json|tablo|veri|liste|metin|sayi|kayit|dosya|uygulama|bildirim|uyari)\b|\b(\d+(?:\.\d+)?)\b/gm;
+  const token = /(#.*$)|("(?:[^"\\]|\\.)*")|\b(izin|zamanla|olay|akis|adim|eger|degilse|her|icin|modul|islev|dondur|dur|yaz|kullan|olarak)\b|\b(csv|json|tablo|veri|liste|metin|sayi|kayit|dosya|uygulama|bildirim|uyari|istatistik)\b|\b(\d+(?:\.\d+)?)\b/gm;
   const escape = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   let markup = "";
   let position = 0;
@@ -148,9 +152,16 @@ function DataChart({ preview }: { preview: DataPreview }) {
 }
 
 export default function Home() {
+  // The useAuth hook provides authentication state.
+  // To implement login/logout, call logout(), or start login from an event
+  // handler: onClick={() => startLogin()} (imported from "@/const"). Never call
+  // startLogin() during render (no href={startLogin()}) — it mints a one-time
+  // nonce cookie and must run only at the moment of navigation.
+  let { user, loading, error, isAuthenticated, logout } = useAuth();
+
   const [code, setCode] = useState(DEFAULT_CODE);
   const [activeExample, setActiveExample] = useState("veri-baslangic");
-  const [result, setResult] = useState(() => runNokta(DEFAULT_CODE));
+  const [result, setResult] = useState(() => runNokta(DEFAULT_CODE, { registry: NOKTA_LIBRARY_CATALOG, manifest: NOKTA_PACKAGE_MANIFEST }));
   const [runCount, setRunCount] = useState(1);
   const [isRunning, setIsRunning] = useState(false);
   const [selectedLine, setSelectedLine] = useState<number | null>(null);
@@ -174,7 +185,7 @@ export default function Home() {
   const runCode = () => {
     setIsRunning(true);
     window.setTimeout(() => {
-      const next = runNokta(code, { datasets });
+      const next = runNokta(code, { datasets, registry: NOKTA_LIBRARY_CATALOG, manifest: NOKTA_PACKAGE_MANIFEST });
       setResult(next);
       setRunCount((value) => value + 1);
       setSelectedLine(next.entries.find((entry) => entry.tone === "error")?.line ?? null);
@@ -183,20 +194,20 @@ export default function Home() {
   };
 
   const openExample = (id: string) => {
-    const example = NOKTA_EXAMPLES.find((item) => item.id === id);
-    if (!example) return;
-    setActiveExample(id);
-    setCode(example.code);
-    setResult(runNokta(example.code, { datasets }));
-    setSelectedLine(null);
-  };
+  const example = NOKTA_EXAMPLES.find((item) => item.id === id);
+  if (!example) return;
+  setActiveExample(id);
+  setCode(example.code);
+  setResult(runNokta(example.code, { datasets, registry: NOKTA_LIBRARY_CATALOG, manifest: NOKTA_PACKAGE_MANIFEST }));
+  setSelectedLine(null);
+};
 
   const resetCode = () => {
-    const example = NOKTA_EXAMPLES.find((item) => item.id === activeExample) ?? NOKTA_EXAMPLES[3];
-    setCode(example.code);
-    setResult(runNokta(example.code, { datasets }));
-    setSelectedLine(null);
-  };
+  const example = NOKTA_EXAMPLES.find((item) => item.id === activeExample) ?? NOKTA_EXAMPLES[3];
+  setCode(example.code);
+  setResult(runNokta(example.code, { datasets, registry: NOKTA_LIBRARY_CATALOG, manifest: NOKTA_PACKAGE_MANIFEST }));
+  setSelectedLine(null);
+};
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -227,6 +238,12 @@ export default function Home() {
   const insertDatasetSnippet = (name: string) => {
     setCode((current) => `${current.trim()}\n\n# Yüklenen veri kümesini kullan\nveri_kumesi = veri.al("${name}")\ntablo.onizle(veri_kumesi, "${name}")`);
     setActiveExample("yerel-veri");
+  };
+
+  const insertPackageSnippet = (name: string, range: string) => {
+    const alias = name === "metin-araclari" ? "metin_araclari" : name;
+    setCode((current) => `${current.trim()}\n\n# Güvenilir kayıttan paket içe aktar\nkullan "${name}@${range}" olarak ${alias}`);
+    setActiveExample("paket-analizi");
   };
 
   const helperHeaders = () => ({ "Content-Type": "application/json", "X-Nokta-Session": helperToken });
@@ -269,7 +286,7 @@ export default function Home() {
           <div className="brand-mark-wrap"><img src={brandMark} alt="Nokta işareti" className="brand-mark" /><span className="brand-orbit" aria-hidden="true" /></div>
           <div>
             <p className="brand-name">Nokta</p>
-            <p className="brand-subtitle">Studio <span>v0.7</span></p>
+            <p className="brand-subtitle">Studio <span>v1.6</span></p>
           </div>
         </div>
 
@@ -282,6 +299,19 @@ export default function Home() {
           <div className="dataset-heading"><span><Database size={14} /> VERİ KÜMELERİ</span><button onClick={() => fileInputRef.current?.click()}><FileUp size={13} /> Yükle</button></div>
           <input ref={fileInputRef} className="dataset-file-input" type="file" accept=".csv,.json,text/csv,application/json" onChange={handleDatasetUpload} />
           {Object.values(datasets).length === 0 ? <p className="dataset-empty">{uploadNotice}</p> : <div className="dataset-list">{Object.values(datasets).map((dataset) => <div className="dataset-item" key={dataset.name}><span><strong>{dataset.name}</strong><small>{dataset.format.toUpperCase()} · yalnızca bu tarayıcıda</small></span><div><button title="Koda ekle" onClick={() => insertDatasetSnippet(dataset.name)}>Ekle</button><button title="Veri kümesini kaldır" onClick={() => setDatasets((current) => { const next = { ...current }; delete next[dataset.name]; return next; })}><X size={13} /></button></div></div>)}</div>}
+        </section>
+
+        <section className="package-shelf" aria-label="Nokta paketleri">
+          <div className="dataset-heading"><span><PackageOpen size={14} /> PAKETLER</span><span className="package-count">{result.packages.length} etkin</span></div>
+          <div className="package-manifest"><strong>nokta.paket.json</strong><small>{NOKTA_PACKAGE_MANIFEST.ad} · v{NOKTA_PACKAGE_MANIFEST.surum}</small></div>
+          <div className="package-list">
+            {Object.values(NOKTA_LIBRARY_CATALOG).map((library) => {
+              const range = NOKTA_PACKAGE_MANIFEST.bagimliliklar[library.ad] ?? "*";
+              return <div className="package-item" key={library.ad}><span><strong>{library.ad}</strong><small>{range} → v{library.surum}</small><em>{library.aciklama}</em></span><button onClick={() => insertPackageSnippet(library.ad, range)}>Koda ekle</button></div>;
+            })}
+          </div>
+          <p className="package-note">Ağdan indirme yoktur; yalnızca bu güvenilir kayıt çözülür.</p>
+          <Link href="/paketler" className="package-manager-link"><PackageCheck size={12} /> Kayıt merkezini aç</Link>
         </section>
 
         <section className="helper-shelf" aria-label="Windows yerel yardımcı bağlantısı">
@@ -363,12 +393,13 @@ export default function Home() {
                 onScroll={(event) => { if (highlightRef.current) { highlightRef.current.scrollTop = event.currentTarget.scrollTop; highlightRef.current.scrollLeft = event.currentTarget.scrollLeft; } }}
               />
             </div>
-            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v0.7</span></footer>
+            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v1.6</span></footer>
           </section>
 
           <aside className="output-panel" aria-label="Yürütme çıktısı">
             <div className="output-header"><div><span className="eyebrow">YÜRÜTME KAYDI</span><h3>{hasError ? "Akış durdu" : "Akış tamamlandı"}</h3></div><span className="flow-seal output-seal" aria-hidden="true" /><div className={`run-indicator ${hasError ? "error" : ""}`}>{hasError ? "HATA" : "BAŞARILI"}</div></div>
-            <div className="output-summary"><span><b>{result.entries.filter((entry) => entry.tone === "step").length}</b> adım</span><span><b>{result.plans.length}</b> plan</span><span><b>{Math.max(1, Math.round(result.duration))} ms</b> süre</span><span><b>#{runCount.toString().padStart(3, "0")}</b> kayıt</span></div>
+            <div className="output-summary"><span><b>{result.entries.filter((entry) => entry.tone === "step").length}</b> adım</span><span><b>{result.plans.length}</b> plan</span><span><b>{result.packages.length}</b> paket</span><span><b>{Math.max(1, Math.round(result.duration))} ms</b> süre</span><span><b>#{runCount.toString().padStart(3, "0")}</b> kayıt</span></div>
+            {result.packages.length > 0 && <section className="package-resolution" aria-label="Çözülen paketler"><div><span><PackageOpen size={14} /> PAKET ÇÖZÜMLEME</span><small>Güvenilir kayıt</small></div>{result.packages.map((packageItem) => <p key={`${packageItem.ad}-${packageItem.takmaAd}`}><strong>{packageItem.ad}@{packageItem.surum}</strong><span>{packageItem.istek} → {packageItem.takmaAd}</span></p>)}</section>}
             {result.plans.length > 0 && <section className="automation-plans" aria-label="Otomasyon planları">
               <div className="automation-plans-heading"><span>OTOMASYON PLANI</span><small>Güvenli önizleme</small></div>
               <div className="automation-plan-list">
@@ -405,7 +436,7 @@ export default function Home() {
         <section className="reference-area" aria-label="Nokta başvuru kartları">
           <div className="reference-heading"><div><p className="eyebrow">DİL KARTLARI</p><h3>Bir bakışta Nokta</h3></div><button onClick={() => setIsReferenceOpen((value) => !value)}><CircleHelp size={15} /> {isReferenceOpen ? "Kısa görünüm" : "Tüm sözdizimi"}</button></div>
           <div className="reference-grid">
-            {editorFacts.map((fact) => <article className="rule-card" key={fact.key}><span>{fact.key.padStart(2, "0")}</span><h4>{fact.title}</h4><p>{fact.text}</p></article>)}
+            {editorFacts.map((fact) => <article className="rule-card" key={fact.key}><span><b>{fact.key.padStart(2, "0")}</b> · NOT</span><small>AKIŞ / {fact.key.padStart(2, "0")}</small><h4>{fact.title}</h4><p>{fact.text}</p></article>)}
             <article className="sculpture-card"><div><span>AKIŞ MANTIĞI</span><p>Bir işi adımlara ayır; her çıktı görünür kalsın.</p></div><img src={flowSculpture} alt="Nokta veri akışını temsil eden soyut çalışma" /></article>
           </div>
           {isReferenceOpen && <div className="syntax-sheet">
@@ -415,6 +446,15 @@ export default function Home() {
             <div><span>İŞLEV</span><pre>{`islev iki_kat(sayi):\n  dondur sayi * 2`}</pre><p>Tekrar kullanılabilir bir işlem tanımlar.</p></div>
             <div><span>VERİ KÜMESİ</span><pre>{`satirlar = veri.al("dosya.csv")\ntablo.onizle(satirlar, "Rapor")`}</pre><p>Yüklenmiş yerel CSV veya JSON dosyasını bağlar.</p></div>
           </div>}
+        </section>
+
+        <section className="package-ledger" aria-label="Paket not defteri">
+          <div className="ledger-heading"><div><p className="eyebrow">V1.6 NOT DEFTERİ</p><h3>Paket akışını izle</h3></div><span>MANİFEST → KİLİT → ÇALIŞTIR</span></div>
+          <div className="ledger-grid">
+            <article><span>01 · BİLDİR</span><h4>Projenin sınırını yaz</h4><p><code>nokta.paket.json</code> bağımlılığı, giriş dosyasını ve proje iznini görünür sözleşmeye dönüştürür.</p></article>
+            <article><span>02 · SABİTLE</span><h4>Çözülen yüzeyi kayda al</h4><p><code>nokta.kilit.json</code> sürümü ve dışa aktarılan işlev yüzeyini aynı akışta tutar.</p></article>
+            <article><span>03 · ÇAĞIR</span><h4>Ad alanında kullan</h4><p><code>kullan "istatistik@^1.2" olarak istatistik</code> yalnızca bildirilen, kilitli paketi bağlar.</p></article>
+          </div>
         </section>
       </section>
     </main>
