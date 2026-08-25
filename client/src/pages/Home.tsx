@@ -286,7 +286,7 @@ export default function Home() {
           <div className="brand-mark-wrap"><img src={brandMark} alt="Nokta işareti" className="brand-mark" /><span className="brand-orbit" aria-hidden="true" /></div>
           <div>
             <p className="brand-name">Nokta</p>
-            <p className="brand-subtitle">Studio <span>v1.6</span></p>
+            <p className="brand-subtitle">Studio <span>v1.9</span></p>
           </div>
         </div>
 
@@ -393,7 +393,7 @@ export default function Home() {
                 onScroll={(event) => { if (highlightRef.current) { highlightRef.current.scrollTop = event.currentTarget.scrollTop; highlightRef.current.scrollLeft = event.currentTarget.scrollLeft; } }}
               />
             </div>
-            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v1.6</span></footer>
+            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v1.9</span></footer>
           </section>
 
           <aside className="output-panel" aria-label="Yürütme çıktısı">
@@ -449,7 +449,7 @@ export default function Home() {
         </section>
 
         <section className="package-ledger" aria-label="Paket not defteri">
-          <div className="ledger-heading"><div><p className="eyebrow">V1.6 NOT DEFTERİ</p><h3>Paket akışını izle</h3></div><span>MANİFEST → KİLİT → ÇALIŞTIR</span></div>
+          <div className="ledger-heading"><div><p className="eyebrow">V1.9 NOT DEFTERİ</p><h3>Paket akışını izle</h3></div><span>MANİFEST → KİLİT → ÇALIŞTIR</span></div>
           <div className="ledger-grid">
             <article><span>01 · BİLDİR</span><h4>Projenin sınırını yaz</h4><p><code>nokta.paket.json</code> bağımlılığı, giriş dosyasını ve proje iznini görünür sözleşmeye dönüştürür.</p></article>
             <article><span>02 · SABİTLE</span><h4>Çözülen yüzeyi kayda al</h4><p><code>nokta.kilit.json</code> sürümü ve dışa aktarılan işlev yüzeyini aynı akışta tutar.</p></article>

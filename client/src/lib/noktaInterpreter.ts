@@ -94,7 +94,7 @@ export interface ResolvedPackage {
 
 export const NOKTA_PACKAGE_MANIFEST: PackageManifest = {
   ad: "nokta-veri-atolyesi",
-  surum: "1.6.0",
+  surum: "1.9.0",
   giris: "akis.nokta",
   bagimliliklar: { istatistik: "^1.2.0", "metin-araclari": "~1.1.0" },
   izinler: ["veri:yerel"],
