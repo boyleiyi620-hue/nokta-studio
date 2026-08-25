@@ -13,6 +13,7 @@ import {
   CircleHelp,
   Code2,
   Database,
+  HardDrive,
   FileCode2,
   FolderTree,
   Keyboard,
@@ -24,6 +25,7 @@ import {
   Table2,
   TerminalSquare,
   FileUp,
+  PlugZap,
   X,
 } from "lucide-react";
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -56,7 +58,7 @@ const flowSculpture = studioAsset("nokta-flow-sculpture.jpg", "/manus-storage/no
 const chartColors = ["#276D57", "#BD8550", "#4B806E", "#D0AA72", "#193C32", "#7DA28E"];
 
 function highlightNokta(source: string) {
-  const token = /(#.*$)|("(?:[^"\\]|\\.)*")|\b(izin|zamanla|olay|akis|adim|eger|degilse|her|icin|islev|dondur|dur|yaz)\b|\b(csv|json|tablo|veri|liste|metin|sayi|kayit|uygulama|bildirim|uyari)\b|\b(\d+(?:\.\d+)?)\b/gm;
+  const token = /(#.*$)|("(?:[^"\\]|\\.)*")|\b(izin|zamanla|olay|akis|adim|eger|degilse|her|icin|islev|dondur|dur|yaz)\b|\b(csv|json|tablo|veri|liste|metin|sayi|kayit|dosya|uygulama|bildirim|uyari)\b|\b(\d+(?:\.\d+)?)\b/gm;
   const escape = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   let markup = "";
   let position = 0;
@@ -93,7 +95,7 @@ function DataChart({ preview }: { preview: DataPreview }) {
 
 export default function Home() {
   const [code, setCode] = useState(DEFAULT_CODE);
-  const [activeExample, setActiveExample] = useState("csv-rapor");
+  const [activeExample, setActiveExample] = useState("veri-baslangic");
   const [result, setResult] = useState(() => runNokta(DEFAULT_CODE));
   const [runCount, setRunCount] = useState(1);
   const [isRunning, setIsRunning] = useState(false);
@@ -103,6 +105,13 @@ export default function Home() {
   const [uploadNotice, setUploadNotice] = useState("CSV veya JSON dosyanı burada yerel olarak bağla.");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
+  const [helperEndpoint, setHelperEndpoint] = useState("https://localhost:8417");
+  const [helperPairingCode, setHelperPairingCode] = useState("");
+  const [helperToken, setHelperToken] = useState("");
+  const [helperStatus, setHelperStatus] = useState("Yerel yardımcı bekleniyor.");
+  const [helperAction, setHelperAction] = useState("file.read");
+  const [helperPath, setHelperPath] = useState("girdi/satislar.csv");
+  const [helperContent, setHelperContent] = useState("");
 
   const lines = useMemo(() => code.split("\n"), [code]);
   const highlightedCode = useMemo(() => highlightNokta(code), [code]);
@@ -166,6 +175,39 @@ export default function Home() {
     setActiveExample("yerel-veri");
   };
 
+  const helperHeaders = () => ({ "Content-Type": "application/json", "X-Nokta-Session": helperToken });
+
+  const pairHelper = async () => {
+    if (!helperPairingCode) { setHelperStatus("Windows yardımcı penceresindeki eşleştirme kodunu girin."); return; }
+    try {
+      const response = await fetch(`${helperEndpoint}/v1/pair`, { method: "POST", headers: { "X-Nokta-Pairing-Code": helperPairingCode } });
+      const body = await response.json();
+      if (!response.ok || !body.sessionToken) { setHelperStatus(body.error ?? "Eşleştirme reddedildi."); return; }
+      setHelperToken(body.sessionToken);
+      setHelperPairingCode("");
+      setHelperStatus(`Eşleştirildi — ${body.workspaceName}; oturum ${Math.round(body.expiresInSeconds / 60)} dakika geçerli.`);
+    } catch { setHelperStatus("HTTPS yardımcıya ulaşılamadı. Sertifika güvenini, adresi ve yardımcıyı kontrol edin."); }
+  };
+
+  const checkHelper = async () => {
+    if (!helperToken) { setHelperStatus("Önce Eşleştir düğmesiyle süreli bir yerel oturum oluşturun."); return; }
+    try {
+      const response = await fetch(`${helperEndpoint}/v1/health`, { headers: helperHeaders() });
+      const body = await response.json();
+      setHelperStatus(response.ok ? `Bağlı — ${body.workspace}` : body.error ?? "Yardımcı bağlantısı reddedildi.");
+    } catch { setHelperStatus("Yerel yardımcıya ulaşılamadı. Windows’ta npm start ile başlatıldığını ve adresi kontrol edin."); }
+  };
+
+  const sendHelperPlan = async () => {
+    if (!helperToken) { setHelperStatus("Plan göndermeden önce Eşleştir düğmesiyle yerel oturum oluşturun."); return; }
+    const plan = { taskId: `ide_${crypto.randomUUID()}`, idempotencyKey: crypto.randomUUID(), expiresAt: new Date(Date.now() + 120_000).toISOString(), actions: [{ type: helperAction, path: helperPath, ...(helperAction === "file.write" ? { content: helperContent } : {}) }] };
+    try {
+      const response = await fetch(`${helperEndpoint}/v1/plans/execute`, { method: "POST", headers: helperHeaders(), body: JSON.stringify(plan) });
+      const body = await response.json();
+      setHelperStatus(response.ok ? `Plan tamamlandı — ${body.receipt?.results?.[0]?.type ?? helperAction}` : body.error ?? "Plan reddedildi.");
+    } catch { setHelperStatus("Plan gönderilemedi. Yardımcı durumu ve yerel ağ adresini kontrol edin."); }
+  };
+
   return (
     <main className="studio-shell" style={{ "--paper-texture": `url("${paperTexture}")` } as CSSProperties & Record<"--paper-texture", string>}>
       <aside className="studio-sidebar" aria-label="Nokta Studio gezintisi">
@@ -173,7 +215,7 @@ export default function Home() {
           <div className="brand-mark-wrap"><img src={brandMark} alt="Nokta işareti" className="brand-mark" /><span className="brand-orbit" aria-hidden="true" /></div>
           <div>
             <p className="brand-name">Nokta</p>
-            <p className="brand-subtitle">Studio <span>v0.4</span></p>
+            <p className="brand-subtitle">Studio <span>v0.5</span></p>
           </div>
         </div>
 
@@ -186,6 +228,17 @@ export default function Home() {
           <div className="dataset-heading"><span><Database size={14} /> VERİ KÜMELERİ</span><button onClick={() => fileInputRef.current?.click()}><FileUp size={13} /> Yükle</button></div>
           <input ref={fileInputRef} className="dataset-file-input" type="file" accept=".csv,.json,text/csv,application/json" onChange={handleDatasetUpload} />
           {Object.values(datasets).length === 0 ? <p className="dataset-empty">{uploadNotice}</p> : <div className="dataset-list">{Object.values(datasets).map((dataset) => <div className="dataset-item" key={dataset.name}><span><strong>{dataset.name}</strong><small>{dataset.format.toUpperCase()} · yalnızca bu tarayıcıda</small></span><div><button title="Koda ekle" onClick={() => insertDatasetSnippet(dataset.name)}>Ekle</button><button title="Veri kümesini kaldır" onClick={() => setDatasets((current) => { const next = { ...current }; delete next[dataset.name]; return next; })}><X size={13} /></button></div></div>)}</div>}
+        </section>
+
+        <section className="helper-shelf" aria-label="Windows yerel yardımcı bağlantısı">
+          <div className="dataset-heading"><span><HardDrive size={14} /> WINDOWS YARDIMCI</span><span className="helper-prototype">PROTOTİP</span></div>
+          <p>İzinli dosya planları yalnızca cihazındaki çalışma klasöründe yürür.</p>
+          <label>Adres<input value={helperEndpoint} onChange={(event) => setHelperEndpoint(event.target.value)} aria-label="Yerel yardımcı adresi" /></label>
+          <label>Eşleştirme kodu<input value={helperPairingCode} onChange={(event) => setHelperPairingCode(event.target.value)} type="password" placeholder="5 dakika geçerli kod" aria-label="Yerel yardımcı eşleştirme kodu" /></label>
+          <button className="helper-check" onClick={pairHelper}><PlugZap size={13} /> Eşleştir</button>
+          <button className="helper-check" onClick={checkHelper}><PlugZap size={13} /> Bağlantıyı dene</button>
+          <div className="helper-plan"><select value={helperAction} onChange={(event) => setHelperAction(event.target.value)} aria-label="Dosya eylemi"><option value="file.read">Dosya oku</option><option value="file.write">Dosya yaz</option><option value="file.list">Klasör listele</option><option value="file.mkdir">Klasör oluştur</option></select><input value={helperPath} onChange={(event) => setHelperPath(event.target.value)} placeholder="girdi/satislar.csv" aria-label="Göreli dosya yolu" />{helperAction === "file.write" && <textarea value={helperContent} onChange={(event) => setHelperContent(event.target.value)} placeholder="Yazılacak içerik" aria-label="Yazılacak içerik" />}<button className="helper-send" onClick={sendHelperPlan}><ShieldCheck size={13} /> İzinli planı gönder</button></div>
+          <small className="helper-status">{helperStatus}</small>
         </section>
 
         <nav className="side-section" aria-label="Dosyalar">

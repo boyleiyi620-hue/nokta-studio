@@ -1,0 +1,15 @@
+{
+  "name": "nokta-windows-helper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Nokta için izinli Windows dosya sistemi yerel yardımcı prototipi",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node test/smoke.mjs",
+    "setup:https": "powershell -ExecutionPolicy Bypass -File scripts/setup-https.ps1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

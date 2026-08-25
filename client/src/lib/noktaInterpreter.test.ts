@@ -116,4 +116,17 @@ yaz json.yaz(gruplar)`);
     expect(result.diagnostics[0]).toMatchObject({ code: "NOKTA_201" });
     expect(result.diagnostics[0].suggestion).toContain("CSV veya JSON");
   });
+
+  it("büyük listeleri parçalar, sayfalar, benzersizleştirir ve tablo özetler", () => {
+    const result = runNokta("sayilar = [4, 8, 4, 12, 16, 20]\nessiz = liste.essiz(sayilar)\nparcalar = liste.parcala(essiz, 2)\nsayfa = liste.sayfala(essiz, 2, 2)\nsatislar = [{ bolge: \"A\", tutar: 1200 }, { bolge: \"B\", tutar: 700 }, { bolge: \"C\", tutar: 1800 }]\nozet = tablo.ozet(satislar, \"tutar\")\nyaz liste.uzunluk(parcalar)\nyaz sayfa.toplam_oge\nyaz ozet.en_buyuk");
+
+    expect(result.ok).toBe(true);
+    expect(result.entries.map((entry) => entry.text)).toEqual(["3", "5", "1800"]);
+  });
+
+  it("dosya eylemini yalnızca açık izinle yerel yardımcı planı olarak kaydeder", () => {
+    const result = runNokta("izin dosya \"Raporlar/\"\ndosya.oku(\"Raporlar/satislar.csv\")");
+    expect(result.ok).toBe(true);
+    expect(result.entries.some((entry) => entry.text.includes("dosya okuma planlandı"))).toBe(true);
+  });
 });

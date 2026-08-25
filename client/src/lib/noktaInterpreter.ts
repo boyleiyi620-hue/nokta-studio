@@ -528,7 +528,15 @@ class Runtime {
   }
 
   requirePermission(domain: string, target: string) {
-    if (!this.permissions.has(`${domain}:${target}`)) {
+    const exact = this.permissions.has(`${domain}:${target}`);
+    const fileRootAllowed = domain === "dosya" && Array.from(this.permissions).some((item) => {
+      const prefix = "dosya:";
+      if (!item.startsWith(prefix)) return false;
+      const root = item.slice(prefix.length).replaceAll("\\", "/");
+      const normalizedTarget = target.replaceAll("\\", "/");
+      return root.endsWith("/") && normalizedTarget.startsWith(root) && !normalizedTarget.slice(root.length).includes("../");
+    });
+    if (!exact && !fileRootAllowed) {
       throw new NoktaError(0, `“${target}” için ${domain} izni yok. Önce izin ${domain} "${target}" bildirin.`);
     }
   }
@@ -742,6 +750,27 @@ function createGlobals(runtime: Runtime, datasets: Record<string, DatasetSource>
     ilk: ((value) => onlyList(value)[0] ?? null) as NativeFunction,
     son: ((value) => onlyList(value).at(-1) ?? null) as NativeFunction,
     icerir_mi: ((value, item) => onlyList(value).some((candidate) => areEqual(candidate, item))) as NativeFunction,
+    al: ((value, count) => onlyList(value).slice(0, Math.max(0, Math.floor(asNumber(count, 0))))) as NativeFunction,
+    atla: ((value, count) => onlyList(value).slice(Math.max(0, Math.floor(asNumber(count, 0))))) as NativeFunction,
+    birlestir: ((left, right) => [...onlyList(left), ...onlyList(right)]) as NativeFunction,
+    essiz: ((value) => {
+      const seen = new Set<string>();
+      return onlyList(value).filter((item) => {
+        const key = formatValue(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }) as NativeFunction,
+    parcala: ((value, size) => {
+      const list = onlyList(value);
+      const chunkSize = Math.floor(asNumber(size, 0));
+      if (chunkSize <= 0) throw new NoktaError(0, "Parça boyutu sıfırdan büyük olmalıdır.", "NOKTA_121", "liste.parcala için 100, 500 veya 1000 gibi pozitif bir parça boyutu kullanın.");
+      const chunks: RuntimeValue[] = [];
+      for (let index = 0; index < list.length; index += chunkSize) chunks.push(list.slice(index, index + chunkSize));
+      return chunks;
+    }) as NativeFunction,
+    sayfala: ((value, page, perPage) => pageResult(onlyList(value), page, perPage)) as NativeFunction,
   });
   globals.define("metin", {
     buyuk: ((value) => onlyText(value).toLocaleUpperCase("tr")) as NativeFunction,
@@ -820,6 +849,33 @@ function createGlobals(runtime: Runtime, datasets: Record<string, DatasetSource>
       const table = ensureTable(value);
       return table.length === 0 ? 0 : table.reduce((sum, row) => sum + asNumber(getRecordField(row, onlyText(field)), 0), 0) / table.length;
     }) as NativeFunction,
+    essiz: ((value, field) => {
+      const name = onlyText(field);
+      const seen = new Set<string>();
+      return ensureTable(value).filter((row) => {
+        const key = formatValue(getRecordField(row, name));
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }) as NativeFunction,
+    birlestir: ((left, right, leftField, rightField = leftField) => {
+      const leftName = onlyText(leftField);
+      const rightName = onlyText(rightField);
+      const rightIndex = new Map<string, RuntimeRecord[]>();
+      for (const row of ensureTable(right)) {
+        const key = formatValue(getRecordField(row, rightName));
+        rightIndex.set(key, [...(rightIndex.get(key) ?? []), row]);
+      }
+      return ensureTable(left).flatMap((row) => (rightIndex.get(formatValue(getRecordField(row, leftName))) ?? []).map((match) => ({ ...row, ...match })));
+    }) as NativeFunction,
+    sayfala: ((value, page, perPage) => pageResult(ensureTable(value), page, perPage)) as NativeFunction,
+    ozet: ((value, field) => {
+      const table = ensureTable(value);
+      const name = onlyText(field);
+      const numbers = table.map((row) => asNumber(getRecordField(row, name), 0));
+      return { satir_sayisi: table.length, toplam: numbers.reduce((sum, item) => sum + item, 0), ortalama: numbers.length ? numbers.reduce((sum, item) => sum + item, 0) / numbers.length : 0, en_kucuk: numbers.length ? Math.min(...numbers) : 0, en_buyuk: numbers.length ? Math.max(...numbers) : 0 };
+    }) as NativeFunction,
     onizle: ((value, title = "Tablo") => {
       const table = ensureTable(value);
       runtime.addPreview(onlyText(title), table);
@@ -834,6 +890,26 @@ function createGlobals(runtime: Runtime, datasets: Record<string, DatasetSource>
     degerler: ((value) => {
       if (!isRecord(value)) throw new NoktaError(0, "Bu işlem bir kayıt bekliyor.");
       return Object.values(value);
+    }) as NativeFunction,
+  });
+  globals.define("dosya", {
+    oku: ((path) => {
+      const target = onlyText(path);
+      runtime.requirePermission("dosya", target);
+      runtime.entries.push({ tone: "automation", text: `Yerel yardımcıdan dosya okuma planlandı — ${target}` });
+      return "";
+    }) as NativeFunction,
+    yaz: ((path, content) => {
+      const target = onlyText(path);
+      runtime.requirePermission("dosya", target);
+      runtime.entries.push({ tone: "automation", text: `Yerel yardımcıdan dosya yazma planlandı — ${target} (${onlyText(content).length} karakter)` });
+      return true;
+    }) as NativeFunction,
+    listele: ((path) => {
+      const target = onlyText(path);
+      runtime.requirePermission("dosya", target);
+      runtime.entries.push({ tone: "automation", text: `Yerel yardımcıdan klasör listeleme planlandı — ${target}` });
+      return [];
     }) as NativeFunction,
   });
   globals.define("uygulama", {
@@ -912,6 +988,16 @@ function compareValue(actual: RuntimeValue, operator: string, expected: RuntimeV
 function compareSort(left: RuntimeValue, right: RuntimeValue) {
   if (typeof left === "number" && typeof right === "number") return left - right;
   return formatValue(left).localeCompare(formatValue(right), "tr");
+}
+
+function pageResult<T extends RuntimeValue>(items: T[], page: RuntimeValue, perPage: RuntimeValue): RuntimeRecord {
+  const pageNumber = Math.floor(asNumber(page, 0));
+  const pageSize = Math.floor(asNumber(perPage, 0));
+  if (pageNumber <= 0 || pageSize <= 0) throw new NoktaError(0, "Sayfa ve sayfa boyutu sıfırdan büyük olmalıdır.", "NOKTA_122", "Örneğin tablo.sayfala(veri, 1, 500) kullanın.");
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = (pageNumber - 1) * pageSize;
+  return { sayfa: pageNumber, sayfa_boyutu: pageSize, toplam_oge: total, toplam_sayfa: totalPages, ogeler: items.slice(start, start + pageSize) };
 }
 
 function parseCsv(source: string): RuntimeRecord[] {
@@ -998,6 +1084,37 @@ export interface NoktaExample {
 }
 
 export const NOKTA_EXAMPLES: NoktaExample[] = [
+  {
+    id: "veri-baslangic",
+    title: "CSV + JSON başlangıcı",
+    subtitle: "İki veri kaynağını işle ve karşılaştır",
+    tags: ["başlangıç", "csv", "json"],
+    code: `# CSV satış verisi ve JSON hedef verisini birlikte işler.
+ham_satis_csv = "sehir,tutar,durum\\nAnkara,1200,tamam\\nİzmir,850,bekliyor\\nİstanbul,2400,tamam\\nAnkara,675,tamam"
+ham_hedef_json = '[{"sehir":"Ankara","hedef":1500},{"sehir":"İstanbul","hedef":2000}]'
+
+akis "Satış ve hedef özeti":
+  adim "CSV siparişlerini hazırla":
+    satislar = csv.coz(ham_satis_csv)
+    tamamlanan = tablo.filtrele(satislar, "durum", "==", "tamam")
+    sirali_satislar = tablo.sirala(tamamlanan, "tutar", "azalan")
+    tablo.onizle(sirali_satislar, "Tamamlanan siparişler")
+
+  adim "JSON hedeflerini hazırla":
+    hedefler = json.coz(ham_hedef_json)
+    ankara_hedefi = tablo.filtrele(hedefler, "sehir", "==", "Ankara")
+    tablo.onizle(ankara_hedefi, "Ankara hedefi")
+
+  adim "Özet üret":
+    toplam_ciro = tablo.topla(sirali_satislar, "tutar")
+    ankara_satislari = tablo.filtrele(sirali_satislar, "sehir", "==", "Ankara")
+    ankara_ciro = tablo.topla(ankara_satislari, "tutar")
+    ankara_hedef = tablo.topla(ankara_hedefi, "hedef")
+    yaz "Toplam tamamlanan ciro: " + toplam_ciro
+    yaz "Ankara cirosu: " + ankara_ciro
+    yaz "Ankara hedefi: " + ankara_hedef
+    yaz "Hedef farkı: " + (ankara_ciro - ankara_hedef)`,
+  },
   {
     id: "csv-rapor",
     title: "CSV satış raporu",
@@ -1091,8 +1208,15 @@ yaz "Toplam: " + toplam
 yaz "Ortalama: " + ortalama
 
 her not icin notlar:
-  eger not >= 90:
-    yaz "Öne çıkan not: " + not`,
+      eger not >= 90:
+        yaz "Öne çıkan not: " + not`,
+  },
+  {
+    id: "buyuk-veri",
+    title: "Büyük veri akışı",
+    subtitle: "Parçala, sayfala ve özetle",
+    tags: ["parcala", "sayfala", "ozet"],
+    code: "# Büyük listeleri bellek dostu parçalara ayır ve sayfala.\nsatirlar = [120, 85, 120, 210, 340, 85, 560, 210, 700]\nessiz_satirlar = liste.essiz(satirlar)\nparcalar = liste.parcala(essiz_satirlar, 3)\nsayfa = liste.sayfala(essiz_satirlar, 2, 3)\n\nsatislar = [{ bolge: \"Ankara\", tutar: 1200 }, { bolge: \"İzmir\", tutar: 850 }, { bolge: \"İstanbul\", tutar: 2400 }, { bolge: \"Ankara\", tutar: 675 }]\nozet = tablo.ozet(satislar, \"tutar\")\n\nyaz \"Benzersiz değer: \" + liste.uzunluk(essiz_satirlar)\nyaz \"Parça sayısı: \" + liste.uzunluk(parcalar)\nyaz \"2. sayfadaki değerler: \" + sayfa.ogeler\nyaz \"En yüksek satış: \" + ozet.en_buyuk\nyaz \"Ortalama satış: \" + sayi.yuvarla(ozet.ortalama)",
   },
   {
     id: "satis",

@@ -214,3 +214,9 @@ Kod editörü artık Nokta anahtar sözcüklerini, veri modüllerini, metinleri,
 ## 10. Doğrulama kaydı
 
 Masaüstü görünümde üç bölmeli atölye düzeni; kaynak editörü, yürütme kaydı, otomasyon planı, veri önizlemesi, görsel analiz ve dil kartlarını aynı çalışma bağlamında sunacak biçimde doğrulandı. Küçük ekran görünümünde kenar çubuğu geri çekilir; kod editörü, yürütme kaydı ve dil kartları tek sütunda editör öncelikli bir sıraya geçer. Otomatik testler yerleşik örnekleri, Türkçe değişken adlarını, kayıt alanlarını, akış/adım kaydını, tanımsız ad hatasını, izinli otomasyonu, genişletilmiş veri yardımcılarını, CSV dönüşümünü, tablo önizlemesini, JSON gruplamayı, yüklenmiş veri kümesi bağlamını ve öneri içeren hata tanılarını kapsar.
+
+## 11. v0.5 — Büyük koleksiyonlar ve yerel dosya planı
+
+`liste.essiz`, yinelenen değerleri korumadan ayırır. `liste.parcala(liste, boyut)` büyük listeleri düzenli parçalar hâline getirir. `liste.sayfala(liste, sayfa, sayfa_boyutu)`; `sayfa`, `sayfa_boyutu`, `toplam_oge`, `toplam_sayfa` ve `ogeler` alanlarını içeren bir kayıt üretir. `tablo.essiz`, `tablo.birlestir`, `tablo.sayfala` ve `tablo.ozet` ise büyük kayıt kümelerinde tekrar eden veriyi azaltma, iki tabloyu anahtarla eşleştirme, sayfa bazlı erişim ve sayısal özet alma için eklenmiştir.
+
+Windows hedefi için `izin dosya "Raporlar/"` ile başlayan `dosya.oku`, `dosya.yaz` ve `dosya.listele` çağrıları, IDE’de doğrudan yan etki yaratmaz. Bunlar kullanıcı onaylı yerel yardımcıya gönderilecek eylem planı oluşturur. Yerel yardımcı prototipi yalnızca izinli çalışma klasöründe CSV, JSON, Nokta ve metin dosyalarını; boyut sınırı ve denetim kaydıyla işler.

@@ -1,0 +1,29 @@
+# CSV satış verisi ve JSON hedef verisini birlikte işler.
+# Bu örnek doğrudan Nokta Studio v0.4'te çalışır.
+
+ham_satis_csv = "sehir,tutar,durum\nAnkara,1200,tamam\nİzmir,850,bekliyor\nİstanbul,2400,tamam\nAnkara,675,tamam"
+ham_hedef_json = '[{"sehir":"Ankara","hedef":1500},{"sehir":"İstanbul","hedef":2000}]'
+
+akis "Satış ve hedef özeti":
+  adim "CSV siparişlerini hazırla":
+    satislar = csv.coz(ham_satis_csv)
+    tamamlanan = tablo.filtrele(satislar, "durum", "==", "tamam")
+    sirali_satislar = tablo.sirala(tamamlanan, "tutar", "azalan")
+    tablo.onizle(sirali_satislar, "Tamamlanan siparişler")
+
+  adim "JSON hedeflerini hazırla":
+    hedefler = json.coz(ham_hedef_json)
+    ankara_hedefi = tablo.filtrele(hedefler, "sehir", "==", "Ankara")
+    tablo.onizle(ankara_hedefi, "Ankara hedefi")
+
+  adim "Özet üret":
+    toplam_ciro = tablo.topla(sirali_satislar, "tutar")
+    ankara_satislari = tablo.filtrele(sirali_satislar, "sehir", "==", "Ankara")
+    ankara_ciro = tablo.topla(ankara_satislari, "tutar")
+    ankara_hedef = tablo.topla(ankara_hedefi, "hedef")
+
+    yaz "Toplam tamamlanan ciro: " + toplam_ciro
+    yaz "Ankara cirosu: " + ankara_ciro
+    yaz "Ankara hedefi: " + ankara_hedef
+    yaz "Hedef farkı: " + (ankara_ciro - ankara_hedef)
+    yaz "JSON özeti:\n" + json.yaz(ankara_hedefi)
