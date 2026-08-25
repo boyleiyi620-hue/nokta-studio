@@ -25,10 +25,11 @@ import {
   Table2,
   TerminalSquare,
   FileUp,
+  Download,
   PlugZap,
   X,
 } from "lucide-react";
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import { DEFAULT_CODE, formatValue, NOKTA_EXAMPLES, type ConsoleEntry, type DataPreview, type DatasetSource, runNokta } from "@/lib/noktaInterpreter";
 
 const editorFacts = [
@@ -58,7 +59,7 @@ const flowSculpture = studioAsset("nokta-flow-sculpture.jpg", "/manus-storage/no
 const chartColors = ["#276D57", "#BD8550", "#4B806E", "#D0AA72", "#193C32", "#7DA28E"];
 
 function highlightNokta(source: string) {
-  const token = /(#.*$)|("(?:[^"\\]|\\.)*")|\b(izin|zamanla|olay|akis|adim|eger|degilse|her|icin|islev|dondur|dur|yaz)\b|\b(csv|json|tablo|veri|liste|metin|sayi|kayit|dosya|uygulama|bildirim|uyari)\b|\b(\d+(?:\.\d+)?)\b/gm;
+  const token = /(#.*$)|("(?:[^"\\]|\\.)*")|\b(izin|zamanla|olay|akis|adim|eger|degilse|her|icin|modul|islev|dondur|dur|yaz)\b|\b(csv|json|tablo|veri|liste|metin|sayi|kayit|dosya|uygulama|bildirim|uyari)\b|\b(\d+(?:\.\d+)?)\b/gm;
   const escape = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   let markup = "";
   let position = 0;
@@ -72,11 +73,13 @@ function highlightNokta(source: string) {
 }
 
 function DataChart({ preview }: { preview: DataPreview }) {
+  const chartRef = useRef<HTMLDivElement>(null);
   const numericColumns = preview.columns.filter((column) => preview.rows.some((row) => typeof row[column] === "number"));
   const defaultCategory = preview.columns.find((column) => !numericColumns.includes(column)) ?? preview.columns[0] ?? "";
   const [category, setCategory] = useState(defaultCategory);
   const [metric, setMetric] = useState(numericColumns[0] ?? "");
-  const [mode, setMode] = useState<"bar" | "pie">("bar");
+  const [mode, setMode] = useState<"bar" | "pie" | "line" | "scatter">("bar");
+  const [exportNotice, setExportNotice] = useState("");
 
   useEffect(() => {
     setCategory(preview.columns.find((column) => !numericColumns.includes(column)) ?? preview.columns[0] ?? "");
@@ -85,11 +88,62 @@ function DataChart({ preview }: { preview: DataPreview }) {
 
   const data = preview.rows.map((row) => ({ name: formatValue(row[category] ?? null), value: Number(row[metric] ?? 0) })).filter((item) => Number.isFinite(item.value));
   if (!metric || data.length === 0) return <p className="chart-empty">Grafik için en az bir sayısal sütun gerekir.</p>;
+  const values = data.map((item) => item.value);
+  const summary = { total: values.reduce((sum, value) => sum + value, 0), average: values.reduce((sum, value) => sum + value, 0) / values.length, min: Math.min(...values), max: Math.max(...values) };
+
+  const download = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const exportCsv = () => {
+    const escape = (value: unknown) => `"${formatValue(value as never).replaceAll('"', '""')}"`;
+    const csv = [preview.columns.map(escape).join(","), ...preview.exportRows.map((row) => preview.columns.map((column) => escape(row[column] ?? null)).join(","))].join("\n");
+    download(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }), `${preview.title.toLocaleLowerCase("tr-TR").replaceAll(/[^a-z0-9]+/g, "-") || "nokta-veri"}.csv`);
+    setExportNotice(`${preview.exportRows.length} satır CSV olarak indirildi.`);
+  };
+
+  const exportPng = () => {
+    const svg = chartRef.current?.querySelector("svg");
+    if (!svg) { setExportNotice("PNG için görünür bir grafik bulunamadı."); return; }
+    const box = svg.getBoundingClientRect();
+    const copy = svg.cloneNode(true) as SVGSVGElement;
+    copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    copy.setAttribute("width", String(Math.max(1, Math.round(box.width))));
+    copy.setAttribute("height", String(Math.max(1, Math.round(box.height))));
+    const svgUrl = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copy)], { type: "image/svg+xml;charset=utf-8" }));
+    const image = new Image();
+    image.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(box.width * scale));
+      canvas.height = Math.max(1, Math.round(box.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) { URL.revokeObjectURL(svgUrl); setExportNotice("PNG yüzeyi oluşturulamadı."); return; }
+      context.fillStyle = "#fffdf7";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.scale(scale, scale);
+      context.drawImage(image, 0, 0, Math.max(1, box.width), Math.max(1, box.height));
+      canvas.toBlob((blob) => {
+        if (blob) { download(blob, `${preview.title.toLocaleLowerCase("tr-TR").replaceAll(/[^a-z0-9]+/g, "-") || "nokta-grafik"}.png`); setExportNotice("Seçili grafik PNG olarak indirildi."); }
+        else setExportNotice("PNG dosyası oluşturulamadı.");
+        URL.revokeObjectURL(svgUrl);
+      }, "image/png");
+    };
+    image.onerror = () => { URL.revokeObjectURL(svgUrl); setExportNotice("Grafik PNG biçimine dönüştürülemedi."); };
+    image.src = svgUrl;
+  };
 
   return <section className="data-chart" aria-label={`${preview.title} grafik analizi`}>
-    <div className="data-chart-heading"><span><BarChart3 size={14} /> GÖRSEL ANALİZ</span><div className="chart-mode"><button className={mode === "bar" ? "active" : ""} onClick={() => setMode("bar")} aria-label="Çubuk grafik"><BarChart3 size={13} /></button><button className={mode === "pie" ? "active" : ""} onClick={() => setMode("pie")} aria-label="Pasta grafik"><PieChartIcon size={13} /></button></div></div>
+    <div className="data-chart-heading"><span><BarChart3 size={14} /> GÖRSEL ANALİZ</span><div className="chart-mode"><button className={mode === "bar" ? "active" : ""} onClick={() => setMode("bar")} aria-label="Çubuk grafik"><BarChart3 size={13} /></button><button className={mode === "pie" ? "active" : ""} onClick={() => setMode("pie")} aria-label="Pasta grafik"><PieChartIcon size={13} /></button><button className={mode === "line" ? "active text-mode" : "text-mode"} onClick={() => setMode("line")} aria-label="Çizgi grafik">Ç</button><button className={mode === "scatter" ? "active text-mode" : "text-mode"} onClick={() => setMode("scatter")} aria-label="Dağılım grafiği">D</button></div></div>
     <div className="chart-selectors"><label>Kategori<select value={category} onChange={(event) => setCategory(event.target.value)}>{preview.columns.map((column) => <option key={column}>{column}</option>)}</select></label><label>Değer<select value={metric} onChange={(event) => setMetric(event.target.value)}>{numericColumns.map((column) => <option key={column}>{column}</option>)}</select></label></div>
-    <div className="chart-canvas"><ResponsiveContainer width="100%" height={166}>{mode === "bar" ? <BarChart data={data} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}><XAxis dataKey="name" tick={{ fontSize: 9, fill: "#56625c" }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 8, fill: "#7b847e" }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ border: "1px solid #d6d0c2", borderRadius: 2, fontSize: 11 }} /><Bar dataKey="value" fill="#276D57" radius={[2, 2, 0, 0]} /></BarChart> : <PieChart><Tooltip contentStyle={{ border: "1px solid #d6d0c2", borderRadius: 2, fontSize: 11 }} /><Pie data={data} dataKey="value" nameKey="name" innerRadius={34} outerRadius={66} paddingAngle={2}>{data.map((_, index) => <Cell key={index} fill={chartColors[index % chartColors.length]} />)}</Pie></PieChart>}</ResponsiveContainer></div>
+    <div className="chart-canvas" ref={chartRef}><ResponsiveContainer width="100%" height={166}>{mode === "bar" ? <BarChart data={data} margin={{ top: 8, right: 4, left: -16, bottom: 0 }}><XAxis dataKey="name" tick={{ fontSize: 9, fill: "#56625c" }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 8, fill: "#7b847e" }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ border: "1px solid #d6d0c2", borderRadius: 2, fontSize: 11 }} /><Bar dataKey="value" fill="#276D57" radius={[2, 2, 0, 0]} /></BarChart> : mode === "pie" ? <PieChart><Tooltip contentStyle={{ border: "1px solid #d6d0c2", borderRadius: 2, fontSize: 11 }} /><Pie data={data} dataKey="value" nameKey="name" innerRadius={34} outerRadius={66} paddingAngle={2}>{data.map((_, index) => <Cell key={index} fill={chartColors[index % chartColors.length]} />)}</Pie></PieChart> : mode === "line" ? <LineChart data={data} margin={{ top: 10, right: 8, left: -16, bottom: 0 }}><CartesianGrid vertical={false} stroke="#d9d3c6" strokeDasharray="2 3" /><XAxis dataKey="name" tick={{ fontSize: 9, fill: "#56625c" }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 8, fill: "#7b847e" }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ border: "1px solid #d6d0c2", borderRadius: 2, fontSize: 11 }} /><Line type="monotone" dataKey="value" stroke="#276D57" strokeWidth={2} dot={{ r: 3, fill: "#BD8550" }} /></LineChart> : <ScatterChart margin={{ top: 10, right: 8, left: -16, bottom: 0 }}><CartesianGrid stroke="#d9d3c6" strokeDasharray="2 3" /><XAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "#56625c" }} /><YAxis type="number" dataKey="value" tick={{ fontSize: 8, fill: "#7b847e" }} /><Tooltip cursor={{ strokeDasharray: "2 3" }} contentStyle={{ border: "1px solid #d6d0c2", borderRadius: 2, fontSize: 11 }} /><Scatter data={data} fill="#276D57" /></ScatterChart>}</ResponsiveContainer></div>
+    <div className="chart-summary"><span>Σ {formatValue(summary.total)}</span><span>Ø {formatValue(Math.round(summary.average * 100) / 100)}</span><span>Min {formatValue(summary.min)}</span><span>Max {formatValue(summary.max)}</span></div>
+    <div className="chart-export"><button onClick={exportCsv}><Download size={12} /> CSV indir</button><button onClick={exportPng}><Download size={12} /> PNG indir</button>{exportNotice && <small>{exportNotice}</small>}</div>
   </section>;
 }
 
@@ -215,7 +269,7 @@ export default function Home() {
           <div className="brand-mark-wrap"><img src={brandMark} alt="Nokta işareti" className="brand-mark" /><span className="brand-orbit" aria-hidden="true" /></div>
           <div>
             <p className="brand-name">Nokta</p>
-            <p className="brand-subtitle">Studio <span>v0.5</span></p>
+            <p className="brand-subtitle">Studio <span>v0.6</span></p>
           </div>
         </div>
 
@@ -309,7 +363,7 @@ export default function Home() {
                 onScroll={(event) => { if (highlightRef.current) { highlightRef.current.scrollTop = event.currentTarget.scrollTop; highlightRef.current.scrollLeft = event.currentTarget.scrollLeft; } }}
               />
             </div>
-            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v0.5</span></footer>
+            <footer className="editor-footer"><span><Keyboard size={14} /> Çalıştırmak için <kbd>⌘ Enter</kbd></span><span>{lines.length} satır · Nokta v0.6</span></footer>
           </section>
 
           <aside className="output-panel" aria-label="Yürütme çıktısı">

@@ -129,4 +129,12 @@ yaz json.yaz(gruplar)`);
     expect(result.ok).toBe(true);
     expect(result.entries.some((entry) => entry.text.includes("dosya okuma planlandı"))).toBe(true);
   });
+
+  it("modül içinde özel işlev tanımlar ve ad alanı üzerinden çağırır", () => {
+    const result = runNokta("modul finans:\n  islev kdv_ekle(tutar, oran):\n    dondur tutar * (1 + oran)\n  islev net_kar(gelir, gider):\n    dondur gelir - gider\n\nyaz finans.kdv_ekle(1000, 0.20)\nyaz finans.net_kar(4500, 1750)");
+    expect(result.ok).toBe(true);
+    expect(result.entries.map((entry) => entry.text)).toContain("1200");
+    expect(result.entries.map((entry) => entry.text)).toContain("2750");
+    expect(result.entries.some((entry) => entry.text.includes("Modül hazır — finans"))).toBe(true);
+  });
 });

@@ -31,6 +31,7 @@ export interface DataPreview {
   title: string;
   columns: string[];
   rows: RuntimeRecord[];
+  exportRows: RuntimeRecord[];
 }
 
 export interface DatasetSource {
@@ -87,6 +88,7 @@ type Statement =
   | { type: "permission"; domain: string; target: Expression; line: number }
   | { type: "schedule"; title: Expression; body: Statement[]; line: number }
   | { type: "event"; title: Expression; body: Statement[]; line: number }
+  | { type: "module"; name: string; body: Statement[]; line: number }
   | { type: "function"; name: string; parameters: string[]; body: Statement[]; line: number }
   | { type: "return"; expression: Expression; line: number }
   | { type: "stop"; expression?: Expression; line: number }
@@ -129,6 +131,10 @@ class Environment {
       return;
     }
     this.values.set(name, value);
+  }
+
+  snapshot(): RuntimeRecord {
+    return Object.fromEntries(this.values.entries());
   }
 
   private has(name: string): boolean {
@@ -488,6 +494,11 @@ class ProgramParser {
       this.index += 1;
       return { type: "event", title: parseExpression(event[1], line), body: this.parseChildBlock(source), line };
     }
+    const module = content.match(/^modul\s+([A-Za-z_ÇĞİÖŞÜçğıöşü][A-Za-z0-9_ÇĞİÖŞÜçğıöşü]*)\s*:\s*$/);
+    if (module) {
+      this.index += 1;
+      return { type: "module", name: module[1], body: this.parseChildBlock(source), line };
+    }
     const fn = content.match(/^islev\s+([A-Za-z_ÇĞİÖŞÜçğıöşü][A-Za-z0-9_ÇĞİÖŞÜçğıöşü]*)\s*\((.*)\)\s*:\s*$/);
     if (fn) {
       const parameters = fn[2].trim() === "" ? [] : fn[2].split(",").map((parameter) => parameter.trim());
@@ -549,7 +560,7 @@ class Runtime {
 
   addPreview(title: string, table: RuntimeRecord[]) {
     const columns = Array.from(new Set(table.flatMap((row) => Object.keys(row))));
-    this.previews.push({ title, columns, rows: table.slice(0, 6) });
+    this.previews.push({ title, columns, rows: table.slice(0, 6), exportRows: table });
     this.entries.push({ tone: "info", text: `Tablo önizlemesi hazır — ${title}: ${table.length} satır, ${columns.length} sütun` });
   }
 
@@ -623,6 +634,14 @@ class Runtime {
         const title = formatValue(this.evaluate(statement.title, environment, statement.line));
         this.plans.push({ kind: "olay", title, line: statement.line });
         this.entries.push({ tone: "automation", line: statement.line, text: `Olay dinleyicisi hazır — ${title}` });
+        return { kind: "normal" };
+      }
+      case "module": {
+        const moduleEnvironment = new Environment(environment);
+        const result = this.executeBlock(statement.body, moduleEnvironment);
+        if (result.kind !== "normal") return result;
+        environment.define(statement.name, moduleEnvironment.snapshot());
+        this.entries.push({ tone: "info", line: statement.line, text: `Modül hazır — ${statement.name}` });
         return { kind: "normal" };
       }
       case "function":
@@ -1208,8 +1227,15 @@ yaz "Toplam: " + toplam
 yaz "Ortalama: " + ortalama
 
 her not icin notlar:
-      eger not >= 90:
-        yaz "Öne çıkan not: " + not`,
+  eger not >= 90:
+    yaz "Öne çıkan not: " + not`,
+  },
+  {
+    id: "modul-finans",
+    title: "Finans modülü",
+    subtitle: "Özel işlevleri ad alanında topla",
+    tags: ["modul", "islev", "dondur"],
+    code: "# Modül, ilişkili özel işlevleri tek bir ad altında toplar.\nmodul finans:\n  islev kdv_ekle(tutar, oran):\n    dondur tutar * (1 + oran)\n\n  islev net_kar(gelir, gider):\n    dondur gelir - gider\n\n  islev kar_marji(gelir, gider):\n    eger gelir == 0:\n      dondur 0\n    dondur (gelir - gider) / gelir\n\nbrut_satis = finans.kdv_ekle(12500, 0.20)\nnet_kar = finans.net_kar(12500, 8400)\nmarj = finans.kar_marji(12500, 8400)\n\nyaz \"KDV dahil satış: \" + brut_satis\nyaz \"Net kar: \" + net_kar\nyaz \"Kar marjı: %\" + sayi.yuvarla(marj * 100)",
   },
   {
     id: "buyuk-veri",

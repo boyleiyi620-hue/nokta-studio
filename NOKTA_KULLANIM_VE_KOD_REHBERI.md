@@ -220,3 +220,23 @@ Masaüstü görünümde üç bölmeli atölye düzeni; kaynak editörü, yürüt
 `liste.essiz`, yinelenen değerleri korumadan ayırır. `liste.parcala(liste, boyut)` büyük listeleri düzenli parçalar hâline getirir. `liste.sayfala(liste, sayfa, sayfa_boyutu)`; `sayfa`, `sayfa_boyutu`, `toplam_oge`, `toplam_sayfa` ve `ogeler` alanlarını içeren bir kayıt üretir. `tablo.essiz`, `tablo.birlestir`, `tablo.sayfala` ve `tablo.ozet` ise büyük kayıt kümelerinde tekrar eden veriyi azaltma, iki tabloyu anahtarla eşleştirme, sayfa bazlı erişim ve sayısal özet alma için eklenmiştir.
 
 Windows hedefi için `izin dosya "Raporlar/"` ile başlayan `dosya.oku`, `dosya.yaz` ve `dosya.listele` çağrıları, IDE’de doğrudan yan etki yaratmaz. Bunlar kullanıcı onaylı yerel yardımcıya gönderilecek eylem planı oluşturur. Yerel yardımcı prototipi yalnızca izinli çalışma klasöründe CSV, JSON, Nokta ve metin dosyalarını; boyut sınırı ve denetim kaydıyla işler.
+
+## 12. v0.6 — Modüller ve zengin görsel analiz
+
+`modul ad:` bloğu, ilgili özel işlevleri ad alanı altında toplar. Blok içindeki `islev` tanımları `ad.islev_adi(...)` biçiminde çağrılır. Bu sayede finans, raporlama ve veri temizleme gibi alanlar tek dosyada dahi isim çakışması oluşturmadan ayrıştırılabilir.
+
+```nokta
+modul finans:
+  islev net_kar(gelir, gider):
+    dondur gelir - gider
+
+yaz finans.net_kar(4500, 1750)
+```
+
+Veri önizleme paneli, çubuk ve pasta grafiklerine ek olarak çizgi ve dağılım modlarını sunar. Her önizleme için toplam, ortalama, en küçük ve en büyük değerler otomatik hesaplanır. Kategori ve sayısal sütun seçimleri değiştirildiğinde tüm grafik türleri aynı veri görünümünü kullanır.
+
+## 13. v0.7 — CSV ve PNG dışa aktarma
+
+Her `tablo.onizle` sonucu, **CSV indir** ve **PNG indir** eylemlerini gösterir. CSV dışa aktarma, önizlemede gösterilen ilk satırlarla sınırlı değildir; o önizlemeyi üreten tüm tablo satırlarını UTF-8 biçiminde indirir. Başlıktaki UTF-8 işareti, Türkçe karakterlerin yaygın hesap tablosu uygulamalarında doğru açılmasına yardımcı olur.
+
+PNG dışa aktarma, seçili görünümü — çubuk, pasta, çizgi veya dağılım — yüksek çözünürlüklü beyaz arka planlı bir dosyaya dönüştürür. Grafik türü veya kategori/değer sütunu değiştirildiğinde indirme eylemi o anda ekranda bulunan görünümü alır. Her iki indirme de tarayıcıda üretilir; veri sunucuya gönderilmez.
